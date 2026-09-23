@@ -43,7 +43,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 //          or duplicate rows.
 
 import { clashes, type TimeSlot } from "../src/lib/clash";
-import { type ActivitySeed, openPlanStore, ClashError, type PlanStore } from "../src/lib/plan-store";
+import {
+  type ActivitySeed,
+  openPlanStore,
+  ClashError,
+  NotFoundError,
+  optionStatus,
+  SEED_CATALOGUE,
+  type PlanStore,
+} from "../src/lib/plan-store";
 
 // Days per DESIGN.md: 1-5, Mon-Fri.
 const MON = 1;
@@ -221,5 +229,97 @@ describe("picking (real SQLite, temp file per test)", () => {
 
     expect(store.listPicks(planA).map((a) => a.id)).toEqual([critA.id]);
     expect(store.listPicks(planB).map((a) => a.id)).toEqual([critB.id]);
+  });
+});
+
+// DESIGN.md, added this session: "Picking an activity id that does not exist
+// is refused with HTTP 404. Nothing is written."
+describe("unknown activity id (real SQLite, temp file per test)", () => {
+  let dir: string;
+  let store: PlanStore;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "crit7-plan-"));
+    store = openPlanStore(join(dir, "test.db"));
+  });
+
+  afterEach(() => {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("refuses to pick an activity id that does not exist, and writes nothing", () => {
+    const planId = randomUUID();
+
+    expect(() => store.pick(planId, 999999)).toThrow(NotFoundError);
+    expect(store.listPicks(planId)).toEqual([]);
+  });
+
+  // plan-store's pick() takes only (planId, activityId) — there is no
+  // parameter through which a caller could supply course_code/type, and
+  // DESIGN.md's API only ever accepts {"activityId": <id>}. There is no
+  // vector for a caller to pass a mismatched course_code/type, so the
+  // "pick row always matches its activity" case does not apply at this
+  // layer. Skipped rather than written against a parameter that doesn't
+  // exist.
+  it.skip("a pick row's course_code/type always match its activity, even if the caller passes something else — not applicable: pick() has no such parameter", () => {});
+});
+
+// DESIGN.md, added this session: "The page's 'fits' / 'clashes with ...'
+// label and the server's refusal come from the same function."
+describe("optionStatus (the shared fits/clashes/picked check)", () => {
+  let dir: string;
+  let store: PlanStore;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "crit7-plan-"));
+    store = openPlanStore(join(dir, "test.db"));
+  });
+
+  afterEach(() => {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("matches DESIGN.md's worked example after picking COMP4020 CRIT 01", () => {
+    const planId = randomUUID();
+    const crit01 = store.findActivity("COMP4020", "CRIT", "01");
+    store.pick(planId, crit01.id);
+    const picks = store.listPicks(planId);
+
+    const tut01 = store.findActivity("COMP2100", "TUT", "01");
+    const tut03 = store.findActivity("COMP2100", "TUT", "03");
+    const crit02 = store.findActivity("COMP4020", "CRIT", "02");
+
+    expect(optionStatus(picks, tut01)).toEqual({ clashesWith: crit01 });
+    expect(optionStatus(picks, tut03)).toBe("fits");
+    expect(optionStatus(picks, crit02)).toBe("fits");
+    expect(optionStatus(picks, crit01)).toBe("picked");
+  });
+
+  it("pick() agrees with optionStatus for every seed activity, after one pick", () => {
+    const planId = randomUUID();
+    const crit01 = store.findActivity("COMP4020", "CRIT", "01");
+    store.pick(planId, crit01.id);
+
+    for (const seed of SEED_CATALOGUE) {
+      const activity = store.findActivity(seed.courseCode, seed.type, seed.group);
+      const picksBefore = store.listPicks(planId);
+      const status = optionStatus(picksBefore, activity);
+
+      if (status === "fits" || status === "picked") {
+        expect(() => store.pick(planId, activity.id)).not.toThrow();
+      } else {
+        let error: unknown;
+        try {
+          store.pick(planId, activity.id);
+        } catch (e) {
+          error = e;
+        }
+        expect(error).toBeInstanceOf(ClashError);
+        expect((error as ClashError).clashesWith.id).toBe(status.clashesWith.id);
+        expect(store.listPicks(planId)).toEqual(picksBefore);
+      }
+    }
   });
 });
