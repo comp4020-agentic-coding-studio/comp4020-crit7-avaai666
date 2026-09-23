@@ -69,6 +69,10 @@ function gridRow(min: number): number {
     <title>Clash-free class picker</title>
   </head>
   <body>
+    <header class="site-header">
+      <p class="site-title">Clash-free class picker</p>
+      <p class="site-disclaimer">Student project · not an official ANU system</p>
+    </header>
     <nav aria-label="site">
       <a href="/">Plan</a>
       <a href="/about">About</a>
@@ -123,7 +127,7 @@ function gridRow(min: number): number {
                               <button type="submit" disabled={clash !== null}>
                                 {picked ? "Remove" : "Pick"}
                               </button>
-                              <span class="option-label">{picked ? "picked" : reason ?? "fits"}</span>
+                              <span class="option-label">{picked ? "Picked" : reason ?? "fits"}</span>
                             </form>
                           </li>
                         );
@@ -148,7 +152,7 @@ function gridRow(min: number): number {
             <div class="week-grid-body" style={`grid-template-rows: repeat(${GRID_ROWS}, 1fr);`}>
               {picks.map((activity) => (
                 <div
-                  class="week-grid-event"
+                  class={`week-grid-event ${activity.fixed ? "week-grid-event-fixed" : "week-grid-event-picked"}`}
                   style={`grid-column: ${activity.day + 1}; grid-row: ${gridRow(activity.startMin)} / ${gridRow(activity.endMin)};`}
                 >
                   {activity.courseCode} {activity.type} {activity.group}
@@ -171,7 +175,7 @@ function gridRow(min: number): number {
                   ) : (
                     <ul>
                       {dayPicks.map((activity) => (
-                        <li>
+                        <li class={activity.fixed ? "week-list-event-fixed" : "week-list-event-picked"}>
                           {activity.courseCode} {activity.type} {activity.group} ({formatTime(activity.startMin)}–
                           {formatTime(activity.endMin)})
                         </li>
@@ -241,7 +245,7 @@ function gridRow(min: number): number {
       .activity-type h3 {
         margin-block: 0.5rem 0.25rem;
         font-size: 1rem;
-        color: #444;
+        color: var(--anu-unigrey);
       }
 
       .options {
@@ -252,6 +256,7 @@ function gridRow(min: number): number {
 
       .option {
         margin-block-end: 0.4rem;
+        padding: 0.15rem 0.4rem;
       }
 
       .option-form {
@@ -270,18 +275,41 @@ function gridRow(min: number): number {
         min-width: 6rem;
       }
 
+      /* DESIGN.md "Look", Options: "picked" = gold-tint row + "Picked" text. */
+      .option[data-status="picked"] {
+        background: var(--anu-gold-tint);
+      }
+
       .option[data-status="picked"] .option-label {
-        color: #0a7a2f;
+        color: var(--anu-unigrey);
         font-weight: 600;
       }
 
+      /* Fixed classes read the same as "picked" — they're in the plan too,
+         just with nothing to remove. */
+      .option[data-status="fixed"] {
+        background: var(--anu-gold-tint);
+      }
+
+      .option[data-status="fixed"] .option-label {
+        color: var(--anu-unigrey);
+        font-weight: 600;
+      }
+
+      /* DESIGN.md "Look", Options: clashing = greyed text (--disabled-grey
+         passes WCAG AA on white, 5.74:1), disabled button, reason in words —
+         colour is never the only signal. */
+      .option[data-status="clashes"] {
+        color: var(--disabled-grey);
+      }
+
       .option[data-status="clashes"] .option-label {
-        color: #b3261e;
+        color: var(--disabled-grey);
       }
 
       .week-grid {
         display: grid;
-        border: 1px solid #ccc;
+        border: 1px solid var(--anu-unigrey);
       }
 
       .week-grid-header {
@@ -293,7 +321,7 @@ function gridRow(min: number): number {
         text-align: center;
         font-weight: 600;
         padding-block: 0.25rem;
-        border-inline-start: 1px solid #ccc;
+        border-inline-start: 1px solid var(--anu-unigrey);
       }
 
       .week-grid-body {
@@ -309,10 +337,24 @@ function gridRow(min: number): number {
         padding: 0.25rem;
         font-size: 0.75rem;
         line-height: 1.2;
-        background: #e6f0ff;
-        border: 1px solid #0b5fff;
         border-radius: 0.25rem;
         overflow: hidden;
+      }
+
+      /* DESIGN.md "Look", Week view: lectures = black block, white text. */
+      .week-grid-event-fixed {
+        background: var(--anu-black);
+        color: var(--anu-white);
+        border: 1px solid var(--anu-black);
+      }
+
+      /* Picked tutorials/crits = gold-tint block with a 4px gold left
+         border, Unigrey text. */
+      .week-grid-event-picked {
+        background: var(--anu-gold-tint);
+        border: 1px solid var(--anu-gold-tint);
+        border-left: 4px solid var(--anu-gold);
+        color: var(--anu-unigrey);
       }
 
       .week-list {
@@ -326,8 +368,21 @@ function gridRow(min: number): number {
       }
 
       .week-list-empty {
-        color: #666;
+        color: var(--disabled-grey);
         margin-block: 0 1rem;
+      }
+
+      .week-list-event-fixed {
+        background: var(--anu-black);
+        color: var(--anu-white);
+        padding: 0.15rem 0.4rem;
+      }
+
+      .week-list-event-picked {
+        background: var(--anu-gold-tint);
+        border-left: 4px solid var(--anu-gold);
+        color: var(--anu-unigrey);
+        padding: 0.15rem 0.4rem 0.15rem 0.25rem;
       }
 
       /* Layout switch, DESIGN.md "Layout": grid beside the list on desktop,

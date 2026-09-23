@@ -1,9 +1,24 @@
+/* DESIGN.md "Look": the ANU web style guide palette, and nothing else.
+   --disabled-grey isn't in that palette — it's the one named exception
+   DESIGN.md allows, for text that must stay readable when greyed out.
+   #666666 on white is a 5.74:1 contrast ratio, comfortably over WCAG AA's
+   4.5:1 for text under 24px. */
+:root {
+  --anu-gold: #be830e;
+  --anu-gold-tint: #f5edde;
+  --anu-black: #000000;
+  --anu-white: #ffffff;
+  --anu-unigrey: #333333;
+  --disabled-grey: #666666;
+}
+
 body {
   margin: 0;
-  padding: 2rem;
+  padding: 0 2rem 2rem;
   font-family: system-ui, sans-serif;
   line-height: 1.6;
-  color: #1a1a1a;
+  color: var(--anu-unigrey);
+  background: var(--anu-white);
 }
 
 main {
@@ -12,7 +27,34 @@ main {
 }
 
 a {
-  color: #0b5fff;
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* DESIGN.md "Look": black bar, white text, spans the full width — the
+   negative margin cancels body's side padding just for this bar. */
+.site-header {
+  background: var(--anu-black);
+  color: var(--anu-white);
+  margin: 0 -2rem;
+  padding: 1rem 2rem;
+}
+
+.site-header .site-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.site-header .site-disclaimer {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+}
+
+nav[aria-label="site"] {
+  display: flex;
+  gap: 1rem;
+  padding-block: 1rem;
 }
 
 form {
@@ -33,6 +75,12 @@ input {
 button {
   padding: 0.4rem 1rem;
   font: inherit;
+}
+
+/* DESIGN.md "Look": focus ring visible on every button. */
+button:focus-visible {
+  outline: 2px solid var(--anu-black);
+  outline-offset: 2px;
 }
 
 #messages {
