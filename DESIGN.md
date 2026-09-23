@@ -52,6 +52,14 @@ The server checks the rule again on every pick. It never trusts the page.
 A clashing pick is refused with HTTP 409 and a message naming the class it
 clashes with. Nothing is written.
 
+Picking an activity id that does not exist is refused with HTTP 404.
+Nothing is written.
+
+# What the page shows is what the server checks
+
+The page's "fits" / "clashes with ..." label and the server's refusal
+come from the same function. They cannot disagree.
+
 # Whose plan is it
 
 No login. The first visit gets a random plan id in a cookie
@@ -64,8 +72,12 @@ Times are stored as minutes after midnight. Days are 1–5 (Mon–Fri).
 
     course    (code, title)
     activity  (id, course_code, type, group, day, start_min, end_min)
-    pick      (plan_id, activity_id)
-              one pick per (plan_id, course_code, type)
+              unique (course_code, type, group)
+    pick      (plan_id, activity_id, course_code, type)
+              unique (plan_id, course_code, type)
+              course_code and type are copied from the activity when the
+              pick is written, so the database itself enforces one pick
+              per course+type. They are never taken from the request.
 
 The catalogue is seeded from the table below. It is DEMO data. The page
 says so, visibly: "Demo timetable — times are invented."
