@@ -11,8 +11,8 @@ fixed the design, not the prompt.
 
 The second one came from using the app. Lectures aren't a choice. They go
 in first, then you see which tutorials still fit. So I changed the design
-again. The spec changed once, because the design changed, in one listed
-commit.
+again. The spec only changed when the design changed, in two listed
+commits.
 
 ## What did this work change about who I want to be as a software developer?
 
