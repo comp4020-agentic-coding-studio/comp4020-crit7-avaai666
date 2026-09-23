@@ -108,6 +108,33 @@ towards the word count and don't replace the citation.
   both the grid and the day list.
 - **Citation:** [`2bb7938`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/2bb7938c28cd2c3ce33832537b7a5ef3c75d0df9)
 
+### One test going red was the plan working, not breaking
+- **What happened:** Moving the clash picker onto `/` made
+  `guestbook.test.ts` fail — the reload-persistence check now hit the plan
+  page, not the guestbook. `pnpm check` came back with a real failure.
+- **What I did instead:** I didn't touch the test or the new page to paper
+  over it. Step 0 had already named `guestbook.test.ts` as the one test
+  file allowed to go with the guestbook, in its own commit, right after.
+  I pasted the red run as real evidence, then deleted that test together
+  with the guestbook code in the next commit, nothing else.
+- **How I knew:** After the deletion commit, the same three commands
+  (`grep -i guestbook`, `pnpm test`, `pnpm check`) came back clean: no code
+  or test still refers to it, 48 passed, 0 typecheck errors.
+- **Citation:** [`caa9926`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/caa9926b65c755bea48f28b884b74e12e4ab7156), [`bc7ec25`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/bc7ec253bc9d8281f4a9ff49f35760df30558045)
+
+### I deployed twice to prove the data, not just the code
+- **What happened:** Passing every local test only proves the app works
+  against a database I control. A second SQLite file living in the
+  container instead of on the volume would pass those same tests and lose
+  every pick on the next deploy.
+- **What I did instead:** I picked a class on the live URL, deployed again
+  with the same command, and checked the same cookie jar afterwards instead
+  of trusting that the first deploy was proof enough.
+- **How I knew:** After the second deploy, `GET /` with that jar still
+  showed COMP4020 CRIT 02 as picked — the pick survived a deploy that
+  replaced the container, so it was reading the volume, not the image.
+- **Citation:** [`bc7ec25`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/bc7ec253bc9d8281f4a9ff49f35760df30558045)
+
 ## Before you ship
 
 `pnpm check:evidence` verifies that this comment is gone, that your citations
