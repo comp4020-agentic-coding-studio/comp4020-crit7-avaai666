@@ -242,10 +242,19 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
       const status = document.querySelector<HTMLElement>("#plan-status");
       const REGIONS = ["plan-progress", "plan-layout"];
 
-      function say(text: string): void {
+      // On phone widths the status line is a toast (see the CSS); the
+      // is-visible class only matters there. Errors stay up longer than
+      // "Saved." so there's time to read them.
+      let toastTimer: number | undefined;
+      function say(text: string, ms = 2000): void {
         if (!status) return;
         status.textContent = "";
-        requestAnimationFrame(() => (status.textContent = text));
+        requestAnimationFrame(() => {
+          status.textContent = text;
+          status.classList.add("is-visible");
+          window.clearTimeout(toastTimer);
+          toastTimer = window.setTimeout(() => status.classList.remove("is-visible"), ms);
+        });
       }
 
       function buttons(): HTMLButtonElement[] {
@@ -301,7 +310,7 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
           return;
         }
         const body = await response.json().catch(() => null);
-        say(body?.error ?? `request failed (${response.status})`);
+        say(body?.error ?? `request failed (${response.status})`, 5000);
       });
 
       // DESIGN.md "Preview before you pick". The preview block is absolutely
@@ -592,6 +601,32 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
       @media (max-width: 700px) {
         .week-grid {
           display: none;
+        }
+
+        /* The status line sits near the top, off-screen once you've
+           scrolled down a long list — so on phones it's a toast. Hidden
+           with opacity, not display/visibility, so it stays in the
+           accessibility tree and the live region still announces. */
+        #plan-status {
+          position: fixed;
+          left: 16px;
+          right: 16px;
+          bottom: 16px;
+          z-index: 10;
+          min-height: 0;
+          margin: 0;
+          padding: 0.5rem 0.75rem;
+          border-radius: 0.25rem;
+          background: var(--anu-black);
+          color: var(--anu-white);
+          font-size: 0.875rem;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.2s;
+        }
+
+        #plan-status.is-visible {
+          opacity: 1;
         }
 
         .week-list {
