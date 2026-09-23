@@ -228,8 +228,13 @@ describe("picking (real SQLite, temp file per test)", () => {
     store.pick(planA, critA.id);
     store.pick(planB, critB.id);
 
-    expect(store.listPicks(planA).map((a) => a.id)).toEqual([critA.id]);
-    expect(store.listPicks(planB).map((a) => a.id)).toEqual([critB.id]);
+    // Both plans share the same fixed LECs (DESIGN.md "Lectures come
+    // first") — independence is about what each plan picked, so compare
+    // non-fixed picks only.
+    const nonFixedA = store.listPicks(planA).filter((a) => a.type !== "LEC");
+    const nonFixedB = store.listPicks(planB).filter((a) => a.type !== "LEC");
+    expect(nonFixedA.map((a) => a.id)).toEqual([critA.id]);
+    expect(nonFixedB.map((a) => a.id)).toEqual([critB.id]);
   });
 });
 
@@ -373,7 +378,11 @@ describe("unknown activity id (real SQLite, temp file per test)", () => {
     const planId = randomUUID();
 
     expect(() => store.pick(planId, 999999)).toThrow(NotFoundError);
-    expect(store.listPicks(planId)).toEqual([]);
+    // "Nothing is written" is about the failed pick — the plan's fixed
+    // LECs are still there from the first visit (DESIGN.md "Lectures come
+    // first"), so check no non-fixed pick was written.
+    const nonFixedPicks = store.listPicks(planId).filter((a) => a.type !== "LEC");
+    expect(nonFixedPicks).toEqual([]);
   });
 
   // plan-store's pick() takes only (planId, activityId) — there is no
