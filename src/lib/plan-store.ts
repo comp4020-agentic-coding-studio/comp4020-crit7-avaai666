@@ -55,7 +55,10 @@ function formatTime(min: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-function describeActivity(a: Activity): string {
+// Exported so /plan can render the exact same "clashes with ..." wording
+// ClashError throws — DESIGN.md: "the page's label and the server's
+// refusal come from the same function."
+export function describeActivity(a: Activity): string {
   return `${a.courseCode} ${a.type} ${a.group} (${DAY_NAMES[a.day]} ${formatTime(a.startMin)}–${formatTime(a.endMin)})`;
 }
 
@@ -95,8 +98,15 @@ export function optionStatus(picks: Activity[], activity: Activity): OptionStatu
   return clash ? { clashesWith: clash } : "fits";
 }
 
+export interface CourseInfo {
+  code: string;
+  title: string;
+}
+
 export interface PlanStore {
   findActivity(courseCode: string, type: string, group: string): Activity;
+  listCourses(): CourseInfo[];
+  listActivities(): Activity[];
   listPicks(planId: string): Activity[];
   pick(planId: string, activityId: number): Activity;
   removePick(planId: string, activityId: number): void;
@@ -153,6 +163,28 @@ export function openPlanStore(path: string, catalogue: ActivitySeed[] = SEED_CAT
     },
     // (kept as a plain Error above: that lookup is by course/type/group, for
     // tests and seeding, not DESIGN.md's "picking an activity id" 404 rule)
+
+    listCourses() {
+      return db.select({ code: courses.code, title: courses.title }).from(courses).all();
+    },
+
+    // Ordered by id, i.e. seed/insertion order — DESIGN.md's course list
+    // order, for /plan to group by course and then by activity type.
+    listActivities() {
+      return db
+        .select({
+          id: activities.id,
+          courseCode: activities.courseCode,
+          type: activities.type,
+          group: activities.group,
+          day: activities.day,
+          startMin: activities.startMin,
+          endMin: activities.endMin,
+        })
+        .from(activities)
+        .orderBy(activities.id)
+        .all();
+    },
 
     listPicks(planId) {
       return db
