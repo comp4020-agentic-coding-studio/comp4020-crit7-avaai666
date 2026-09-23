@@ -139,10 +139,10 @@ function seedIfEmpty(db: BetterSQLite3Database, catalogue: ActivitySeed[]): void
   });
 }
 
-// Opens (creating if needed) a SQLite file at `path`, runs the same
-// migrations as the guestbook, and seeds `catalogue` if the activity table
-// is empty. Reopening the same path is safe: migrations no-op once applied,
-// and seeding is skipped once the table has rows.
+// Opens (creating if needed) a SQLite file at `path`, runs migrations, and
+// seeds `catalogue` if the activity table is empty. Reopening the same path
+// is safe: migrations no-op once applied, and seeding is skipped once the
+// table has rows.
 export function openPlanStore(path: string, catalogue: ActivitySeed[] = SEED_CATALOGUE): PlanStore {
   mkdirSync(dirname(path), { recursive: true });
   const client = new Database(path);
