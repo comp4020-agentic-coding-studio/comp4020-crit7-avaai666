@@ -180,7 +180,7 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
                 <div class="week-grid-day">{day}</div>
               ))}
             </div>
-            <div class="week-grid-body" style={`grid-template-rows: repeat(${GRID_ROWS}, 1fr);`}>
+            <div class="week-grid-body" style={`grid-template-rows: repeat(${GRID_ROWS}, minmax(0, 1fr));`}>
               {HOURS.map((h) => (
                 <div
                   class="week-grid-hour"
@@ -192,6 +192,9 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
               {picks.map((activity) => (
                 <div
                   data-activity-id={activity.id}
+                  data-day={activity.day}
+                  data-start={activity.startMin}
+                  data-end={activity.endMin}
                   class={`week-grid-event ${activity.fixed ? "week-grid-event-fixed" : "week-grid-event-picked"}`}
                   style={`grid-column: ${gridPlacement(activity).gridColumn}; grid-row: ${gridPlacement(activity).gridRow};`}
                 >
@@ -236,7 +239,7 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
       // for the server's freshly rendered copies (DESIGN.md "The one flow",
       // step 9). #plan-status sits outside both, so the live region is never
       // replaced and its announcements aren't lost.
-      import { gridPlacement } from "../lib/week-grid";
+      import { gridPlacement, previewSplit } from "../lib/week-grid";
       import { createStatus } from "../lib/status";
 
       const main = document.querySelector<HTMLElement>("main.plan")!;
@@ -313,6 +316,7 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
         previewFor = null;
         document.querySelectorAll(".week-grid-preview").forEach((el) => el.remove());
         document.querySelectorAll(".week-grid-event-clash").forEach((el) => el.classList.remove("week-grid-event-clash"));
+        document.querySelectorAll(".week-grid-event-left").forEach((el) => el.classList.remove("week-grid-event-left"));
       }
 
       function showPreview(target: Element): void {
@@ -334,6 +338,22 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
           why.className = "week-grid-preview-reason";
           why.textContent = reason;
           block.append(why);
+        }
+        // Overlapped blocks move to the left half and the preview takes the
+        // right half, so neither covers the other's text.
+        const events = [...body.querySelectorAll<HTMLElement>(".week-grid-event")];
+        const split = previewSplit(
+          { day: Number(day), startMin: Number(start), endMin: Number(end) },
+          events.map((el) => ({
+            id: Number(el.dataset.activityId),
+            day: Number(el.dataset.day),
+            startMin: Number(el.dataset.start),
+            endMin: Number(el.dataset.end),
+          })),
+        );
+        if (split.preview === "right") block.classList.add("week-grid-preview-right");
+        for (const el of events) {
+          if (split.leftIds.includes(Number(el.dataset.activityId))) el.classList.add("week-grid-event-left");
         }
         body.append(block);
         if (clashId) body.querySelector(`[data-activity-id="${clashId}"]`)?.classList.add("week-grid-event-clash");
@@ -493,7 +513,10 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
         display: grid;
         grid-template-columns: 3rem repeat(5, 1fr);
         grid-auto-flow: dense;
-        min-height: 30rem;
+        /* minmax(0, 1fr) rows: every row is the same height whatever text
+           the blocks hold, so resizing a block during a preview can't move
+           the grid. 42rem keeps roughly the height the text used to give. */
+        min-height: 42rem;
       }
 
       /* Time gutter: one label per hour line, right-aligned against the

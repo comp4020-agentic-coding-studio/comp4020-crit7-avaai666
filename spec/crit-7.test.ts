@@ -749,3 +749,38 @@ describe("status line (Saved. / error)", () => {
     expect(el.textContent!.trim()).toBe("Saved.");
   });
 });
+
+// DESIGN.md "Preview before you pick", as Ava asked after using it: while
+// the preview overlaps existing week blocks they sit side by side, like a
+// calendar — existing block(s) in the left half, the preview in the right
+// half. No overlap: the preview is full width and nothing moves.
+//
+//   src/lib/week-grid.ts
+//     previewSplit(preview: TimeSlot, blocks: (TimeSlot & { id: number })[]):
+//       { preview: "full" | "right"; leftIds: number[] }
+import { previewSplit } from "../src/lib/week-grid";
+
+describe("preview side by side (which half)", () => {
+  const mathLec = { id: 9, ...slot(MON, 840, 900) }; // MATH1005 LEC 01 Mon 14:00-15:00
+  const compLec = { id: 1, ...slot(MON, 660, 780) }; // COMP4020 LEC 01 Mon 11:00-13:00
+  const stat = { id: 14, ...slot(WED, 540, 660) }; //    STAT1003 LEC 01 Wed 09:00-11:00
+
+  it("COMP2100 TUT 03 (Mon 13:00-15:00) over MATH1005 LEC: lecture left, preview right", () => {
+    expect(previewSplit(slot(MON, 780, 900), [compLec, mathLec, stat])).toEqual({ preview: "right", leftIds: [9] });
+  });
+
+  it("touching is not overlapping: the preview stays full width", () => {
+    // Mon 13:00-14:00 touches COMP4020 LEC (ends 13:00) and MATH1005 LEC (starts 14:00).
+    expect(previewSplit(slot(MON, 780, 840), [compLec, mathLec])).toEqual({ preview: "full", leftIds: [] });
+  });
+
+  it("same time on another day doesn't split anything", () => {
+    expect(previewSplit(slot(TUE, 840, 900), [mathLec])).toEqual({ preview: "full", leftIds: [] });
+  });
+
+  it("every overlapped block goes left, in the order given", () => {
+    const a = { id: 3, ...slot(FRI, 600, 660) };
+    const b = { id: 4, ...slot(FRI, 690, 750) };
+    expect(previewSplit(slot(FRI, 630, 720), [b, a])).toEqual({ preview: "right", leftIds: [4, 3] });
+  });
+});

@@ -1,4 +1,4 @@
-import type { TimeSlot } from "./clash";
+import { clashes, type TimeSlot } from "./clash";
 
 // The week grid: 08:00-20:00 in 15-minute rows, so every seed time (all on
 // the hour or half-hour) lines up on a row boundary. Column 1 is the hour
@@ -19,4 +19,15 @@ export function gridPlacement(slot: TimeSlot): { gridColumn: string; gridRow: st
     gridColumn: `${column} / ${column + 1}`,
     gridRow: `${gridRow(slot.startMin)} / ${gridRow(slot.endMin)}`,
   };
+}
+
+// While a preview overlaps existing week blocks, they share the column like
+// a calendar: those blocks in the left half, the preview in the right half.
+// Overlap is the clash rule itself, so touching blocks stay full width.
+export function previewSplit(
+  preview: TimeSlot,
+  blocks: (TimeSlot & { id: number })[],
+): { preview: "full" | "right"; leftIds: number[] } {
+  const leftIds = blocks.filter((b) => clashes(preview, b)).map((b) => b.id);
+  return { preview: leftIds.length > 0 ? "right" : "full", leftIds };
 }
