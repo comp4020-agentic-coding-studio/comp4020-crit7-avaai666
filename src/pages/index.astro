@@ -65,6 +65,10 @@ function formatTime(min: number): string {
 // lines up with the row it names (the 20:00 label sits at the bottom of the
 // last row rather than starting a nonexistent 49th one).
 const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
+
+// Look v2 "Week": a light line every hour, a lighter one every half hour,
+// 08:30 through 19:30 (the grid's own border is the 08:00 and 20:00 edge).
+const GRID_LINES = Array.from({ length: 23 }, (_, i) => 510 + i * 30);
 ---
 
 <!doctype html>
@@ -204,6 +208,12 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
                   {String(h).padStart(2, "0")}:00
                 </div>
               ))}
+              {GRID_LINES.map((min) => (
+                <div
+                  class={`week-grid-line ${min % 60 === 0 ? "week-grid-line-hour" : "week-grid-line-half"}`}
+                  style={`grid-column: 2 / -1; grid-row: ${gridRow(min)} / span 1;`}
+                />
+              ))}
               {picks.map((activity) => (
                 <div
                   data-activity-id={activity.id}
@@ -213,9 +223,13 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
                   class={`week-grid-event ${activity.fixed ? "week-grid-event-fixed" : "week-grid-event-picked"}`}
                   style={`grid-column: ${gridPlacement(activity).gridColumn}; grid-row: ${gridPlacement(activity).gridRow};`}
                 >
-                  {activity.courseCode} {activity.type} {activity.group}
-                  <br />
-                  {formatTime(activity.startMin)}–{formatTime(activity.endMin)}
+                  <span class="block-line block-code">{activity.courseCode}</span>
+                  <span class="block-line">
+                    {activity.type} {activity.group}
+                  </span>
+                  <span class="block-line">
+                    {formatTime(activity.startMin)}–{formatTime(activity.endMin)}
+                  </span>
                 </div>
               ))}
             </div>
@@ -243,6 +257,11 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
                 </li>
               );
             })}
+          </ul>
+          <ul class="week-legend">
+            <li><span class="swatch swatch-lecture" aria-hidden="true"></span>Lecture</li>
+            <li><span class="swatch swatch-picked" aria-hidden="true"></span>Picked</li>
+            <li class="legend-preview"><span class="swatch swatch-preview" aria-hidden="true"></span>Preview</li>
           </ul>
         </section>
       </div>
@@ -602,7 +621,9 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
 
       .week-grid {
         display: grid;
-        border: 1px solid var(--anu-unigrey);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
       }
 
       .week-grid-header {
@@ -614,7 +635,8 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
         text-align: center;
         font-weight: 600;
         padding-block: 0.25rem;
-        border-inline-start: 1px solid var(--anu-unigrey);
+        border-inline-start: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
       }
 
       .week-grid-body {
@@ -639,13 +661,73 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
         text-align: right;
       }
 
+      /* Hour lines solid, half-hour lines dashed: both --line, so the
+         half-hour ones read lighter without a new colour. */
+      .week-grid-line {
+        border-top: 1px solid var(--line);
+        pointer-events: none;
+      }
+
+      .week-grid-line-half {
+        border-top-style: dashed;
+      }
+
       .week-grid-event {
         margin: 1px;
         padding: 0.25rem;
-        font-size: 0.75rem;
+        font-size: 12px;
         line-height: 1.2;
         border-radius: 0.25rem;
         overflow: hidden;
+      }
+
+      /* Look v2: code bold, then type + group, then time; each line cut
+         with an ellipsis, never overflowing the block. */
+      .block-line {
+        display: block;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      .block-code {
+        font-weight: 700;
+      }
+
+      .week-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.25rem;
+        margin: 0.75rem 0 0;
+        padding: 0;
+        list-style: none;
+        font-size: 14px;
+      }
+
+      .week-legend li {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+
+      .swatch {
+        box-sizing: border-box;
+        width: 1.5rem;
+        height: 1rem;
+        border-radius: 3px;
+      }
+
+      .swatch-lecture {
+        background: var(--anu-black);
+      }
+
+      .swatch-picked {
+        background: var(--anu-gold-tint);
+        border-left: 4px solid var(--anu-gold);
+      }
+
+      .swatch-preview {
+        border: 2px dashed var(--anu-black);
       }
 
       /* DESIGN.md "Look", Week view: lectures = black block, white text. */
@@ -775,6 +857,11 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
 
         .week-list {
           display: block;
+        }
+
+        /* No preview on the phone list, so no legend entry for it. */
+        .week-legend .legend-preview {
+          display: none;
         }
       }
     </style>
