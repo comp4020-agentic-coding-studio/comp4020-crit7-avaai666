@@ -36,6 +36,21 @@ before you pick, written in words, on one screen.
 
 That is the whole product. Nothing else.
 
+# Lectures come first
+
+An activity type with exactly one group is fixed. In the seed, that is
+every LEC.
+
+- Fixed classes are in your week from your first visit. You don't pick them.
+- They can't be removed or swapped. Instead of a button they show
+  "Fixed · lecture".
+- Everything else is checked against them. A tutorial or crit that clashes
+  with a lecture is unavailable from the start, with the reason in words:
+  "clashes with lecture MATH1005 LEC 01 (Mon 14:00–15:00)".
+- In each course, the lecture is listed first.
+- If an existing pick clashes with a fixed class (e.g. after the timetable
+  changes), the fixed class wins and that pick is dropped.
+
 # The clash rule
 
 Two classes clash when they are on the same day and their times overlap:
@@ -93,11 +108,14 @@ says so, visibly: "Demo timetable — times are invented."
       TUT  02  Thu 15:00–17:00
       TUT  03  Mon 13:00–15:00
     MATH1005  Discrete Mathematical Models
-      LEC  01  Mon 12:00–13:00
+      LEC  01  Mon 14:00–15:00
       TUT  01  Fri 10:00–11:00
       TUT  02  Tue 11:00–12:00
 
 These are chosen on purpose: some groups clash, some only touch.
+
+No two lectures clash. An unavoidable lecture clash means you can't take
+both courses; that is an enrolment problem, out of scope.
 
 # Layout
 
@@ -107,6 +125,31 @@ Phone (390×844): no grid. The week is a list, grouped by day, below the
 course list. No horizontal scroll.
 
 Keyboard works: every pick and remove is a real button.
+
+# Look
+
+Colours follow the ANU web style guide palette
+(webpublishing.anu.edu.au/web-style-guide/colours), and nothing else:
+
+    ANU Gold        #BE830E   accent only, never more than ~1/8 of the page
+    ANU Gold Tint   #F5EDDE   soft background (picked classes)
+    Black           #000000   header bar, lecture blocks
+    White           #FFFFFF   page background
+    Unigrey         #333333   body text
+
+- Gold is never used for text under 24px (it fails WCAG AA on white).
+- Colour is never the only signal. Every state is also written in words.
+- Header: black bar, white text "Clash-free class picker", and a small
+  line "Student project · not an official ANU system".
+- No ANU logo, crest or wordmark anywhere. This must never be mistaken for
+  a real ANU page.
+- Week view: lectures = black block, white text. Picked tutorials/crits =
+  gold-tint block with a 4px gold left border, Unigrey text. Each block
+  shows course, type, group and time as text.
+- Options: "fits" = normal; "picked" = gold-tint row + "Picked" text;
+  clashing = greyed text, disabled button, the reason in words.
+- System font stack. No web fonts. No external requests.
+- Focus ring visible on every button (2px black outline with offset).
 
 # Not in scope
 
