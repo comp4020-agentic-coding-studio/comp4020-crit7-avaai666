@@ -71,6 +71,30 @@ export class ClashError extends Error {
   }
 }
 
+// DESIGN.md: "Picking an activity id that does not exist is refused with
+// HTTP 404. Nothing is written."
+export class NotFoundError extends Error {
+  constructor(activityId: number) {
+    super(`no such activity: ${activityId}`);
+    this.name = "NotFoundError";
+  }
+}
+
+export type OptionStatus = "picked" | "fits" | { clashesWith: Activity };
+
+// DESIGN.md: "The page's 'fits' / 'clashes with ...' label and the server's
+// refusal come from the same function. They cannot disagree." `picks` is
+// the plan's current picks; the pick for the same course+type as `activity`
+// is ignored, since picking a different group of the same type swaps
+// rather than clashes.
+export function optionStatus(picks: Activity[], activity: Activity): OptionStatus {
+  if (picks.some((p) => p.id === activity.id)) return "picked";
+  const clash = picks.find(
+    (p) => !(p.courseCode === activity.courseCode && p.type === activity.type) && clashes(activity, p),
+  );
+  return clash ? { clashesWith: clash } : "fits";
+}
+
 export interface PlanStore {
   findActivity(courseCode: string, type: string, group: string): Activity;
   listPicks(planId: string): Activity[];
@@ -127,6 +151,8 @@ export function openPlanStore(path: string, catalogue: ActivitySeed[] = SEED_CAT
       if (!row) throw new Error(`no such activity: ${courseCode} ${type} ${group}`);
       return row;
     },
+    // (kept as a plain Error above: that lookup is by course/type/group, for
+    // tests and seeding, not DESIGN.md's "picking an activity id" 404 rule)
 
     listPicks(planId) {
       return db
@@ -146,31 +172,32 @@ export function openPlanStore(path: string, catalogue: ActivitySeed[] = SEED_CAT
         .all();
     },
 
-    // One transaction: load the plan's current picks, drop the one for the
-    // same course+type (it's being replaced, so it never counts as a clash
-    // with what's replacing it), check the rest with clashes(), and only
-    // then write. A clash throws and rolls back — nothing is written.
+    // One transaction: load the plan's current picks (as full Activity rows,
+    // the same shape optionStatus takes), run them through optionStatus —
+    // the same function the page's label comes from — and only write on
+    // "fits"/"picked". A clash throws and rolls back — nothing is written.
     pick(planId, activityId) {
       return db.transaction((tx) => {
         const target = tx.select().from(activities).where(eq(activities.id, activityId)).get();
-        if (!target) throw new Error(`no such activity: ${activityId}`);
+        if (!target) throw new NotFoundError(activityId);
 
         const currentPicks = tx
-          .select({ activityId: picks.activityId, courseCode: picks.courseCode, type: picks.type })
+          .select({
+            id: activities.id,
+            courseCode: activities.courseCode,
+            type: activities.type,
+            group: activities.group,
+            day: activities.day,
+            startMin: activities.startMin,
+            endMin: activities.endMin,
+          })
           .from(picks)
+          .innerJoin(activities, eq(picks.activityId, activities.id))
           .where(eq(picks.planId, planId))
           .all();
 
-        const remaining = currentPicks.filter(
-          (p) => !(p.courseCode === target.courseCode && p.type === target.type),
-        );
-
-        for (const p of remaining) {
-          const other = tx.select().from(activities).where(eq(activities.id, p.activityId)).get();
-          if (other && clashes(target, other)) {
-            throw new ClashError(other);
-          }
-        }
+        const status = optionStatus(currentPicks, target);
+        if (typeof status === "object") throw new ClashError(status.clashesWith);
 
         tx.delete(picks)
           .where(and(eq(picks.planId, planId), eq(picks.courseCode, target.courseCode), eq(picks.type, target.type)))
