@@ -9,3 +9,30 @@ where it lives --- `fly.toml`, the `Dockerfile`, the CI workflow and
 [course website](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/)
 publishes this deliverable's brief and spec. Read them before you plan or build;
 what the agent needs to carry from any of it is your call.
+
+## This week (C7)
+
+DESIGN.md is the source of truth. If the code and DESIGN.md disagree, the
+code is wrong. If you think DESIGN.md is wrong, stop and tell me. Do not
+work around it.
+
+### Do NOT
+- Do not add login, auth, or ANU SSO.
+- Do not fetch or scrape any ANU website. The catalogue comes only from the
+  seed table in DESIGN.md.
+- Do not add features beyond "The one flow" in DESIGN.md.
+- Do not modify .github/workflows/.
+- Do not change the stack (Astro + SQLite on the Fly 'data' volume).
+- Do not delete the guestbook until the new flow works end to end locally.
+- Do not edit a spec test to make it pass. If a test looks wrong, stop and
+  tell me why.
+- Do not trust the page: the server re-checks every clash.
+- Do not say something works without pasting the real command output.
+  "Tests pass" with no output is not accepted.
+- Do not put anything from reflections/ or PROCESS.md on the site.
+
+### Every change
+- One small piece per commit, with a message saying what changed.
+- After each piece: run the tests and `pnpm check`, paste the real output.
+- You have no browser. When a change affects what the page looks like, tell
+  me exactly what to click and at which viewport, and wait for me.
