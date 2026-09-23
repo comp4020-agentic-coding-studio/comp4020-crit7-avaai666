@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { planStore } from "../../lib/plan";
-import { ClashError, NotFoundError } from "../../lib/plan-store";
+import { ClashError, FixedClassError, NotFoundError } from "../../lib/plan-store";
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -13,10 +13,11 @@ export const GET: APIRoute = ({ locals }) => {
   return json(planStore.listPicks(locals.planId), 200);
 };
 
-// DESIGN.md "The one flow" / "The clash rule": picking saves immediately, a
-// clash is refused with 409 naming the class it clashes with, an unknown
-// activity id is refused with 404 — both from plan-store's pick(), never
-// re-decided here.
+// DESIGN.md "The one flow" / "The clash rule" / "Lectures come first":
+// picking saves immediately, a clash is refused with 409 naming the class
+// it clashes with, an unknown activity id is refused with 404, and picking
+// a fixed class is refused with 409 (it's already in the plan and can't be
+// picked) — all from plan-store's pick(), never re-decided here.
 export const POST: APIRoute = async ({ request, locals }) => {
   const body = await request.json().catch(() => null);
   const activityId = (body as { activityId?: unknown } | null)?.activityId;
@@ -29,6 +30,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   } catch (error) {
     if (error instanceof NotFoundError) return json({ error: error.message }, 404);
     if (error instanceof ClashError) return json({ error: error.message }, 409);
+    if (error instanceof FixedClassError) return json({ error: error.message }, 409);
     throw error;
   }
 

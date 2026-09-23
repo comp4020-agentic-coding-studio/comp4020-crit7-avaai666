@@ -19,6 +19,9 @@ export interface Activity {
   day: number;
   startMin: number;
   endMin: number;
+  // DESIGN.md "Lectures come first": an activity type with exactly one
+  // group is fixed. Computed from the catalogue, not stored.
+  fixed: boolean;
 }
 
 export interface ActivitySeed {
@@ -42,7 +45,10 @@ export const SEED_CATALOGUE: ActivitySeed[] = [
   { courseCode: "COMP2100", courseTitle: "Software Design Methodologies", type: "TUT", group: "01", day: 3, startMin: 960, endMin: 1080 },
   { courseCode: "COMP2100", courseTitle: "Software Design Methodologies", type: "TUT", group: "02", day: 4, startMin: 900, endMin: 1020 },
   { courseCode: "COMP2100", courseTitle: "Software Design Methodologies", type: "TUT", group: "03", day: 1, startMin: 780, endMin: 900 },
-  { courseCode: "MATH1005", courseTitle: "Discrete Mathematical Models", type: "LEC", group: "01", day: 1, startMin: 720, endMin: 780 },
+  // DESIGN.md, this session: moved from Mon 12:00-13:00 so no two lectures
+  // clash (COMP4020 LEC 01 is Mon 11:00-13:00) — this is now COMP2100 TUT 03's
+  // fixed-lecture clash instead.
+  { courseCode: "MATH1005", courseTitle: "Discrete Mathematical Models", type: "LEC", group: "01", day: 1, startMin: 840, endMin: 900 },
   { courseCode: "MATH1005", courseTitle: "Discrete Mathematical Models", type: "TUT", group: "01", day: 5, startMin: 600, endMin: 660 },
   { courseCode: "MATH1005", courseTitle: "Discrete Mathematical Models", type: "TUT", group: "02", day: 2, startMin: 660, endMin: 720 },
 ];
@@ -63,12 +69,19 @@ export function describeActivity(a: Activity): string {
 }
 
 // DESIGN.md's exact wording: "clashes with <COURSE> <TYPE> <GROUP>
-// (<Day> <start>-<end>)".
+// (<Day> <start>-<end>)", or "clashes with lecture ..." when the class
+// being clashed with is fixed. Exported so the page's option label and
+// ClashError's message are the same text — DESIGN.md "What the page shows
+// is what the server checks".
+export function clashReason(clashesWith: Activity): string {
+  return `clashes with ${clashesWith.fixed ? "lecture " : ""}${describeActivity(clashesWith)}`;
+}
+
 export class ClashError extends Error {
   readonly clashesWith: Activity;
 
   constructor(clashesWith: Activity) {
-    super(`clashes with ${describeActivity(clashesWith)}`);
+    super(clashReason(clashesWith));
     this.name = "ClashError";
     this.clashesWith = clashesWith;
   }
@@ -83,14 +96,28 @@ export class NotFoundError extends Error {
   }
 }
 
-export type OptionStatus = "picked" | "fits" | { clashesWith: Activity };
+// DESIGN.md "Lectures come first": fixed classes can't be picked, removed
+// or swapped — they're already in the plan.
+export class FixedClassError extends Error {
+  readonly activity: Activity;
+
+  constructor(activity: Activity) {
+    super(`${describeActivity(activity)} is fixed and cannot be picked or removed`);
+    this.name = "FixedClassError";
+    this.activity = activity;
+  }
+}
+
+export type OptionStatus = "picked" | "fits" | "fixed" | { clashesWith: Activity };
 
 // DESIGN.md: "The page's 'fits' / 'clashes with ...' label and the server's
 // refusal come from the same function. They cannot disagree." `picks` is
 // the plan's current picks; the pick for the same course+type as `activity`
 // is ignored, since picking a different group of the same type swaps
-// rather than clashes.
+// rather than clashes. A fixed activity always reports "fixed", even
+// though it's also always present in `picks`.
 export function optionStatus(picks: Activity[], activity: Activity): OptionStatus {
+  if (activity.fixed) return "fixed";
   if (picks.some((p) => p.id === activity.id)) return "picked";
   const clash = picks.find(
     (p) => !(p.courseCode === activity.courseCode && p.type === activity.type) && clashes(activity, p),
@@ -113,15 +140,44 @@ export interface PlanStore {
   close(): void;
 }
 
-function seedIfEmpty(db: BetterSQLite3Database, catalogue: ActivitySeed[]): void {
-  const already = db.select({ id: activities.id }).from(activities).limit(1).all();
-  if (already.length > 0) return;
+const ACTIVITY_COLUMNS = {
+  id: activities.id,
+  courseCode: activities.courseCode,
+  type: activities.type,
+  group: activities.group,
+  day: activities.day,
+  startMin: activities.startMin,
+  endMin: activities.endMin,
+};
 
+// DESIGN.md "Lectures come first": an activity type with exactly one group
+// is fixed. Computed from the catalogue currently in the database, not
+// stored — a set of "courseCode\u0000type" keys.
+function computeFixedSet(db: BetterSQLite3Database): Set<string> {
+  const rows = db.select({ courseCode: activities.courseCode, type: activities.type, group: activities.group }).from(activities).all();
+  const groupsByKey = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const key = `${row.courseCode}\u0000${row.type}`;
+    if (!groupsByKey.has(key)) groupsByKey.set(key, new Set());
+    groupsByKey.get(key)!.add(row.group);
+  }
+  const fixed = new Set<string>();
+  for (const [key, groups] of groupsByKey) {
+    if (groups.size === 1) fixed.add(key);
+  }
+  return fixed;
+}
+
+// Catalogue seeding is an upsert keyed on (course_code, type, group), not
+// only an insert when the table is empty — production already has an old
+// row (e.g. MATH1005 LEC 01's old time) that "seed only when empty" would
+// never fix on the next deploy.
+function upsertCatalogue(db: BetterSQLite3Database, catalogue: ActivitySeed[]): void {
   db.transaction((tx) => {
     const titleByCode = new Map<string, string>();
     for (const seed of catalogue) titleByCode.set(seed.courseCode, seed.courseTitle);
     for (const [code, title] of titleByCode) {
-      tx.insert(courses).values({ code, title }).onConflictDoNothing().run();
+      tx.insert(courses).values({ code, title }).onConflictDoUpdate({ target: courses.code, set: { title } }).run();
     }
     for (const seed of catalogue) {
       tx.insert(activities)
@@ -133,33 +189,77 @@ function seedIfEmpty(db: BetterSQLite3Database, catalogue: ActivitySeed[]): void
           startMin: seed.startMin,
           endMin: seed.endMin,
         })
-        .onConflictDoNothing()
+        .onConflictDoUpdate({
+          target: [activities.courseCode, activities.type, activities.group],
+          set: { day: seed.day, startMin: seed.startMin, endMin: seed.endMin },
+        })
         .run();
     }
   });
 }
 
+// DESIGN.md "Lectures come first": ensures every fixed class is picked for
+// `planId` (idempotent), then drops any non-fixed pick that now clashes
+// with a fixed class — e.g. after the timetable changed and a lecture
+// moved onto a tutorial the plan had already picked. Called whenever a
+// plan's picks are read.
+function ensureFixed(db: BetterSQLite3Database, planId: string, fixed: Activity[]): void {
+  db.transaction((tx) => {
+    for (const f of fixed) {
+      tx.insert(picks)
+        .values({ planId, activityId: f.id, courseCode: f.courseCode, type: f.type })
+        .onConflictDoNothing()
+        .run();
+    }
+
+    const current = tx
+      .select(ACTIVITY_COLUMNS)
+      .from(picks)
+      .innerJoin(activities, eq(picks.activityId, activities.id))
+      .where(eq(picks.planId, planId))
+      .all();
+
+    for (const row of current) {
+      if (fixed.some((f) => f.id === row.id)) continue;
+      const clashesWithFixed = fixed.some(
+        (f) => !(f.courseCode === row.courseCode && f.type === row.type) && clashes(row, f),
+      );
+      if (clashesWithFixed) {
+        tx.delete(picks).where(and(eq(picks.planId, planId), eq(picks.activityId, row.id))).run();
+      }
+    }
+  });
+}
+
 // Opens (creating if needed) a SQLite file at `path`, runs migrations, and
-// seeds `catalogue` if the activity table is empty. Reopening the same path
-// is safe: migrations no-op once applied, and seeding is skipped once the
-// table has rows.
+// upserts `catalogue` into it, keyed on (course_code, type, group) — safe
+// to reopen the same path any number of times, and it picks up catalogue
+// changes on an existing database rather than only ever inserting once.
 export function openPlanStore(path: string, catalogue: ActivitySeed[] = SEED_CATALOGUE): PlanStore {
   mkdirSync(dirname(path), { recursive: true });
   const client = new Database(path);
   client.pragma("journal_mode = WAL");
   const db = drizzle(client);
   migrate(db, { migrationsFolder: "./drizzle" });
-  seedIfEmpty(db, catalogue);
+  upsertCatalogue(db, catalogue);
+
+  let fixedSet = computeFixedSet(db);
+  const toActivity = (row: Omit<Activity, "fixed">): Activity => ({
+    ...row,
+    fixed: fixedSet.has(`${row.courseCode}\u0000${row.type}`),
+  });
+  const fixedActivities = (): Activity[] =>
+    db.select(ACTIVITY_COLUMNS).from(activities).orderBy(activities.id).all().map(toActivity).filter((a) => a.fixed);
 
   return {
     findActivity(courseCode, type, group) {
       const row = db
-        .select()
+        .select(ACTIVITY_COLUMNS)
         .from(activities)
         .where(and(eq(activities.courseCode, courseCode), eq(activities.type, type), eq(activities.group, group)))
         .get();
       if (!row) throw new Error(`no such activity: ${courseCode} ${type} ${group}`);
-      return row;
+      return toActivity(row);
     },
     // (kept as a plain Error above: that lookup is by course/type/group, for
     // tests and seeding, not DESIGN.md's "picking an activity id" 404 rule)
@@ -171,62 +271,41 @@ export function openPlanStore(path: string, catalogue: ActivitySeed[] = SEED_CAT
     // Ordered by id, i.e. seed/insertion order — DESIGN.md's course list
     // order, for /plan to group by course and then by activity type.
     listActivities() {
-      return db
-        .select({
-          id: activities.id,
-          courseCode: activities.courseCode,
-          type: activities.type,
-          group: activities.group,
-          day: activities.day,
-          startMin: activities.startMin,
-          endMin: activities.endMin,
-        })
-        .from(activities)
-        .orderBy(activities.id)
-        .all();
+      return db.select(ACTIVITY_COLUMNS).from(activities).orderBy(activities.id).all().map(toActivity);
     },
 
     listPicks(planId) {
+      ensureFixed(db, planId, fixedActivities());
       return db
-        .select({
-          id: activities.id,
-          courseCode: activities.courseCode,
-          type: activities.type,
-          group: activities.group,
-          day: activities.day,
-          startMin: activities.startMin,
-          endMin: activities.endMin,
-        })
+        .select(ACTIVITY_COLUMNS)
         .from(picks)
         .innerJoin(activities, eq(picks.activityId, activities.id))
         .where(eq(picks.planId, planId))
         .orderBy(activities.id)
-        .all();
+        .all()
+        .map(toActivity);
     },
 
     // One transaction: load the plan's current picks (as full Activity rows,
     // the same shape optionStatus takes), run them through optionStatus —
     // the same function the page's label comes from — and only write on
     // "fits"/"picked". A clash throws and rolls back — nothing is written.
+    // A fixed target is refused outright: it's already in the plan.
     pick(planId, activityId) {
+      ensureFixed(db, planId, fixedActivities());
       return db.transaction((tx) => {
-        const target = tx.select().from(activities).where(eq(activities.id, activityId)).get();
-        if (!target) throw new NotFoundError(activityId);
+        const targetRow = tx.select(ACTIVITY_COLUMNS).from(activities).where(eq(activities.id, activityId)).get();
+        if (!targetRow) throw new NotFoundError(activityId);
+        const target = toActivity(targetRow);
+        if (target.fixed) throw new FixedClassError(target);
 
         const currentPicks = tx
-          .select({
-            id: activities.id,
-            courseCode: activities.courseCode,
-            type: activities.type,
-            group: activities.group,
-            day: activities.day,
-            startMin: activities.startMin,
-            endMin: activities.endMin,
-          })
+          .select(ACTIVITY_COLUMNS)
           .from(picks)
           .innerJoin(activities, eq(picks.activityId, activities.id))
           .where(eq(picks.planId, planId))
-          .all();
+          .all()
+          .map(toActivity);
 
         const status = optionStatus(currentPicks, target);
         if (typeof status === "object") throw new ClashError(status.clashesWith);
@@ -244,6 +323,8 @@ export function openPlanStore(path: string, catalogue: ActivitySeed[] = SEED_CAT
     },
 
     removePick(planId, activityId) {
+      const row = db.select(ACTIVITY_COLUMNS).from(activities).where(eq(activities.id, activityId)).get();
+      if (row && toActivity(row).fixed) throw new FixedClassError(toActivity(row));
       db.delete(picks).where(and(eq(picks.planId, planId), eq(picks.activityId, activityId))).run();
     },
 

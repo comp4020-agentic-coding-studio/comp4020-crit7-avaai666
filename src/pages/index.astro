@@ -1,6 +1,6 @@
 ---
 import { planStore } from "../lib/plan";
-import { type Activity, describeActivity, optionStatus } from "../lib/plan-store";
+import { type Activity, clashReason, optionStatus } from "../lib/plan-store";
 import "../styles.css";
 
 const planId = Astro.locals.planId;
@@ -23,6 +23,9 @@ for (const activity of allActivities) {
   byCourse.get(activity.courseCode)!.push(activity);
 }
 
+// DESIGN.md "Lectures come first": "In each course, the lecture is listed
+// first." A fixed type (exactly one group) sorts before every other type,
+// otherwise insertion order is kept.
 function groupByType(activities: Activity[]): [string, Activity[]][] {
   const order: string[] = [];
   const byType = new Map<string, Activity[]>();
@@ -33,7 +36,12 @@ function groupByType(activities: Activity[]): [string, Activity[]][] {
     }
     byType.get(activity.type)!.push(activity);
   }
-  return order.map((type) => [type, byType.get(type)!]);
+  const fixedFirst = [...order].sort((a, b) => {
+    const aFixed = byType.get(a)!.some((act) => act.fixed);
+    const bFixed = byType.get(b)!.some((act) => act.fixed);
+    return aFixed === bFixed ? 0 : aFixed ? -1 : 1;
+  });
+  return fixedFirst.map((type) => [type, byType.get(type)!]);
 }
 
 const DAY_NAMES = ["", "Mon", "Tue", "Wed", "Thu", "Fri"];
@@ -84,9 +92,23 @@ function gridRow(min: number): number {
                     <ul class="options">
                       {options.map((activity) => {
                         const status = optionStatus(picks, activity);
+                        if (status === "fixed") {
+                          return (
+                            <li class="option" data-status="fixed">
+                              <div class="option-form">
+                                <span class="option-time">
+                                  {DAY_NAMES[activity.day]} {formatTime(activity.startMin)}–
+                                  {formatTime(activity.endMin)}
+                                </span>
+                                <span class="option-group">Group {activity.group}</span>
+                                <span class="option-label">Fixed · lecture</span>
+                              </div>
+                            </li>
+                          );
+                        }
                         const picked = status === "picked";
                         const clash = typeof status === "object" ? status : null;
-                        const reason = clash ? `clashes with ${describeActivity(clash.clashesWith)}` : null;
+                        const reason = clash ? clashReason(clash.clashesWith) : null;
                         return (
                           <li class="option" data-status={picked ? "picked" : clash ? "clashes" : "fits"}>
                             <form
