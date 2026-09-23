@@ -45,12 +45,24 @@ export const SEED_CATALOGUE: ActivitySeed[] = [
   { courseCode: "COMP2100", courseTitle: "Software Design Methodologies", type: "TUT", group: "01", day: 3, startMin: 960, endMin: 1080 },
   { courseCode: "COMP2100", courseTitle: "Software Design Methodologies", type: "TUT", group: "02", day: 4, startMin: 900, endMin: 1020 },
   { courseCode: "COMP2100", courseTitle: "Software Design Methodologies", type: "TUT", group: "03", day: 1, startMin: 780, endMin: 900 },
+  { courseCode: "COMP2100", courseTitle: "Software Design Methodologies", type: "TUT", group: "04", day: 5, startMin: 720, endMin: 840 },
   // DESIGN.md, this session: moved from Mon 12:00-13:00 so no two lectures
   // clash (COMP4020 LEC 01 is Mon 11:00-13:00) — this is now COMP2100 TUT 03's
   // fixed-lecture clash instead.
   { courseCode: "MATH1005", courseTitle: "Discrete Mathematical Models", type: "LEC", group: "01", day: 1, startMin: 840, endMin: 900 },
   { courseCode: "MATH1005", courseTitle: "Discrete Mathematical Models", type: "TUT", group: "01", day: 5, startMin: 600, endMin: 660 },
   { courseCode: "MATH1005", courseTitle: "Discrete Mathematical Models", type: "TUT", group: "02", day: 2, startMin: 660, endMin: 720 },
+  { courseCode: "MATH1005", courseTitle: "Discrete Mathematical Models", type: "TUT", group: "03", day: 3, startMin: 720, endMin: 780 },
+  { courseCode: "STAT1003", courseTitle: "Statistical Techniques", type: "LEC", group: "01", day: 3, startMin: 540, endMin: 660 },
+  { courseCode: "STAT1003", courseTitle: "Statistical Techniques", type: "TUT", group: "01", day: 1, startMin: 900, endMin: 960 },
+  { courseCode: "STAT1003", courseTitle: "Statistical Techniques", type: "TUT", group: "02", day: 3, startMin: 660, endMin: 720 },
+  { courseCode: "STAT1003", courseTitle: "Statistical Techniques", type: "TUT", group: "03", day: 4, startMin: 720, endMin: 780 },
+  { courseCode: "STAT1003", courseTitle: "Statistical Techniques", type: "TUT", group: "04", day: 5, startMin: 780, endMin: 840 },
+  { courseCode: "COMP2310", courseTitle: "Systems, Networks and Concurrency", type: "LEC", group: "01", day: 4, startMin: 540, endMin: 660 },
+  { courseCode: "COMP2310", courseTitle: "Systems, Networks and Concurrency", type: "LAB", group: "01", day: 2, startMin: 720, endMin: 840 },
+  { courseCode: "COMP2310", courseTitle: "Systems, Networks and Concurrency", type: "LAB", group: "02", day: 3, startMin: 780, endMin: 900 },
+  { courseCode: "COMP2310", courseTitle: "Systems, Networks and Concurrency", type: "LAB", group: "03", day: 4, startMin: 660, endMin: 780 },
+  { courseCode: "COMP2310", courseTitle: "Systems, Networks and Concurrency", type: "LAB", group: "04", day: 5, startMin: 840, endMin: 960 },
 ];
 
 const DAY_NAMES = ["", "Mon", "Tue", "Wed", "Thu", "Fri"];
@@ -108,6 +120,31 @@ export class FixedClassError extends Error {
   }
 }
 
+// DESIGN.md "Fill the rest for me": the exact refusal text.
+export const NO_SOLUTION_MESSAGE =
+  "No clash-free way to fill the rest while keeping your current picks. Try removing one.";
+
+export class NoSolutionError extends Error {
+  constructor() {
+    super(NO_SOLUTION_MESSAGE);
+    this.name = "NoSolutionError";
+  }
+}
+
+// DESIGN.md "Progress". A choice is a course+type that is not fixed.
+export interface Progress {
+  fixed: number;
+  made: number;
+  total: number;
+  complete: boolean;
+}
+
+export const COMPLETE_MESSAGE = "Your timetable is complete — no clashes.";
+
+export function progressLine(p: Progress): string {
+  return `${p.fixed} lectures fixed · ${p.made} of ${p.total} choices made`;
+}
+
 export type OptionStatus = "picked" | "fits" | "fixed" | { clashesWith: Activity };
 
 // DESIGN.md: "The page's 'fits' / 'clashes with ...' label and the server's
@@ -137,7 +174,37 @@ export interface PlanStore {
   listPicks(planId: string): Activity[];
   pick(planId: string, activityId: number): Activity;
   removePick(planId: string, activityId: number): void;
+  progress(planId: string): Progress;
+  fill(planId: string): Activity[];
   close(): void;
+}
+
+const typeKey = (a: { courseCode: string; type: string }) => `${a.courseCode}\u0000${a.type}`;
+
+// Groups the catalogue by course+type, keeping listed (id) order for both
+// the types and the groups inside each.
+function groupByTypeKey(catalogue: Activity[]): Map<string, Activity[]> {
+  const byKey = new Map<string, Activity[]>();
+  for (const a of catalogue) {
+    const key = typeKey(a);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key)!.push(a);
+  }
+  return byKey;
+}
+
+// Depth-first over the unmade choices in listed order, trying each group
+// in listed order, so the first completion found is always the same one.
+// `placed` starts as the plan's current picks (fixed classes included).
+function search(choices: Activity[][], placed: Activity[]): Activity[] | null {
+  if (choices.length === 0) return [];
+  const [groups, ...rest] = choices;
+  for (const g of groups) {
+    if (placed.some((p) => clashes(g, p))) continue;
+    const tail = search(rest, [...placed, g]);
+    if (tail) return [g, ...tail];
+  }
+  return null;
 }
 
 const ACTIVITY_COLUMNS = {
@@ -251,7 +318,7 @@ export function openPlanStore(path: string, catalogue: ActivitySeed[] = SEED_CAT
   const fixedActivities = (): Activity[] =>
     db.select(ACTIVITY_COLUMNS).from(activities).orderBy(activities.id).all().map(toActivity).filter((a) => a.fixed);
 
-  return {
+  const store: PlanStore = {
     findActivity(courseCode, type, group) {
       const row = db
         .select(ACTIVITY_COLUMNS)
@@ -328,8 +395,53 @@ export function openPlanStore(path: string, catalogue: ActivitySeed[] = SEED_CAT
       db.delete(picks).where(and(eq(picks.planId, planId), eq(picks.activityId, activityId))).run();
     },
 
+    progress(planId) {
+      const current = store.listPicks(planId);
+      const byKey = groupByTypeKey(store.listActivities());
+      const choiceKeys = [...byKey.keys()].filter((k) => !byKey.get(k)![0].fixed);
+      const pickedKeys = new Set(current.map(typeKey));
+      const made = choiceKeys.filter((k) => pickedKeys.has(k)).length;
+      const noClash = current.every((a, i) => current.slice(i + 1).every((b) => !clashes(a, b)));
+      return {
+        fixed: byKey.size - choiceKeys.length,
+        made,
+        total: choiceKeys.length,
+        complete: made === choiceKeys.length && noClash,
+      };
+    },
+
+    // DESIGN.md "Fill the rest for me": the server does the search, keeps
+    // every existing pick, and writes all new picks in one transaction or
+    // none at all.
+    fill(planId) {
+      ensureFixed(db, planId, fixedActivities());
+      db.transaction((tx) => {
+        const current = tx
+          .select(ACTIVITY_COLUMNS)
+          .from(picks)
+          .innerJoin(activities, eq(picks.activityId, activities.id))
+          .where(eq(picks.planId, planId))
+          .all()
+          .map(toActivity);
+        const catalogue = tx.select(ACTIVITY_COLUMNS).from(activities).orderBy(activities.id).all().map(toActivity);
+        const pickedKeys = new Set(current.map(typeKey));
+        const unmade = [...groupByTypeKey(catalogue).values()].filter(
+          (groups) => !groups[0].fixed && !pickedKeys.has(typeKey(groups[0])),
+        );
+
+        const found = search(unmade, current);
+        if (!found) throw new NoSolutionError();
+
+        for (const a of found) {
+          tx.insert(picks).values({ planId, activityId: a.id, courseCode: a.courseCode, type: a.type }).run();
+        }
+      });
+      return store.listPicks(planId);
+    },
+
     close() {
       client.close();
     },
   };
+  return store;
 }
