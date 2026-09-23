@@ -40,6 +40,8 @@ before you pick, written in words, on one screen.
 
 That is the whole product. Nothing else.
 
+Progress, Preview before you pick and Fill the rest for me below are part of the product too.
+
 # Lectures come first
 
 An activity type with exactly one group is fixed. In the seed, that is
