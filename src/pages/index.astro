@@ -1,10 +1,18 @@
 ---
 import { planStore } from "../lib/plan";
-import { type Activity, clashReason, optionStatus } from "../lib/plan-store";
+import {
+  type Activity,
+  clashReason,
+  COMPLETE_MESSAGE,
+  describeActivity,
+  optionStatus,
+  progressLine,
+} from "../lib/plan-store";
 import "../styles.css";
 
 const planId = Astro.locals.planId;
 const picks = planStore.listPicks(planId);
+const progress = planStore.progress(planId);
 const courses = planStore.listCourses();
 const allActivities = planStore.listActivities();
 
@@ -85,9 +93,22 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
     <main class="plan">
       <h1>Your plan</h1>
       <p>Demo timetable — times are invented.</p>
+
+      <div id="plan-progress" class="progress">
+        <p class="progress-line">{progressLine(progress)}</p>
+        {
+          progress.complete ? (
+            <p class="progress-complete">{COMPLETE_MESSAGE}</p>
+          ) : (
+            <form class="fill-form" data-action="fill">
+              <button type="submit">Fill the rest for me</button>
+            </form>
+          )
+        }
+      </div>
       <p id="plan-status" role="status" aria-live="polite"></p>
 
-      <div class="plan-layout">
+      <div id="plan-layout" class="plan-layout">
         <section class="course-list" aria-label="Courses">
           {
             courseOrder.map((code) => (
@@ -124,14 +145,26 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
                               class="option-form"
                               data-activity-id={activity.id}
                               data-action={picked ? "remove" : "pick"}
+                              data-day={activity.day}
+                              data-start={activity.startMin}
+                              data-end={activity.endMin}
+                              data-label={describeActivity(activity)}
+                              data-reason={reason ?? undefined}
+                              data-clash-id={clash ? clash.clashesWith.id : undefined}
                             >
                               <span class="option-time">
                                 {DAY_NAMES[activity.day]} {formatTime(activity.startMin)}–{formatTime(activity.endMin)}
                               </span>
                               <span class="option-group">Group {activity.group}</span>
-                              <button type="submit" disabled={clash !== null}>
-                                {picked ? "Remove" : "Pick"}
-                              </button>
+                              {picked ? (
+                                <button type="submit">Remove</button>
+                              ) : (
+                                <span class="pick-target">
+                                  <button type="submit" disabled={clash !== null}>
+                                    Pick
+                                  </button>
+                                </span>
+                              )}
                               <span class="option-label">{picked ? "Picked" : reason ?? "fits"}</span>
                             </form>
                           </li>
@@ -165,6 +198,7 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
               ))}
               {picks.map((activity) => (
                 <div
+                  data-activity-id={activity.id}
                   class={`week-grid-event ${activity.fixed ? "week-grid-event-fixed" : "week-grid-event-picked"}`}
                   style={`grid-column: ${activity.day + 1}; grid-row: ${gridRow(activity.startMin)} / ${gridRow(activity.endMin)};`}
                 >
@@ -203,41 +237,166 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
       </div>
     </main>
     <script>
-      // Progressive enhancement, no framework: every pick/remove is a real
-      // <button> in a <form>; this script is what turns the submit into a
-      // fetch call instead of a full-page navigation (the API takes JSON
-      // and DELETE, which a plain HTML form can't send on its own).
-      const status = document.querySelector("#plan-status");
+      // Progressive enhancement, no framework: every pick/remove/fill is a
+      // real <button> in a <form>. Listeners are delegated from <main>, so
+      // they keep working after #plan-progress and #plan-layout are swapped
+      // for the server's freshly rendered copies (DESIGN.md "The one flow",
+      // step 9). #plan-status sits outside both, so the live region is never
+      // replaced and its announcements aren't lost.
+      const main = document.querySelector<HTMLElement>("main.plan")!;
+      const status = document.querySelector<HTMLElement>("#plan-status");
+      const REGIONS = ["plan-progress", "plan-layout"];
 
-      document.querySelectorAll<HTMLFormElement>("form.option-form").forEach((form) => {
-        form.addEventListener("submit", async (event) => {
-          event.preventDefault();
-          const activityId = Number(form.dataset.activityId);
-          const action = form.dataset.action;
+      function say(text: string): void {
+        if (!status) return;
+        status.textContent = "";
+        requestAnimationFrame(() => (status.textContent = text));
+      }
 
-          const response =
-            action === "remove"
+      function buttons(): HTMLButtonElement[] {
+        return REGIONS.flatMap((id) => [...(document.getElementById(id)?.querySelectorAll("button") ?? [])]);
+      }
+
+      function nearestEnabled(index: number): HTMLButtonElement | null {
+        const all = buttons();
+        for (let d = 0; d < all.length; d++) {
+          for (const b of [all[index + d], all[index - d]]) if (b && !b.disabled) return b;
+        }
+        return null;
+      }
+
+      async function refresh(activityId: string | undefined, index: number): Promise<void> {
+        const html = await (await fetch(location.pathname)).text();
+        const fresh = new DOMParser().parseFromString(html, "text/html");
+        const x = window.scrollX;
+        const y = window.scrollY;
+        for (const id of REGIONS) {
+          const next = fresh.getElementById(id);
+          if (next) document.getElementById(id)?.replaceWith(next);
+        }
+        window.scrollTo(x, y);
+        const same = activityId
+          ? document.querySelector<HTMLButtonElement>(`form.option-form[data-activity-id="${activityId}"] button`)
+          : null;
+        (same && !same.disabled ? same : nearestEnabled(index))?.focus({ preventScroll: true });
+      }
+
+      main.addEventListener("submit", async (event) => {
+        const form = event.target as HTMLFormElement;
+        if (!form.matches("form.option-form, form.fill-form")) return;
+        event.preventDefault();
+        clearPreview();
+        const index = buttons().indexOf(form.querySelector("button")!);
+        const { action, activityId } = form.dataset;
+
+        const response =
+          action === "fill"
+            ? await fetch("/api/fill", { method: "POST" })
+            : action === "remove"
               ? await fetch(`/api/picks/${activityId}`, { method: "DELETE" })
               : await fetch("/api/picks", {
                   method: "POST",
                   headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ activityId }),
+                  body: JSON.stringify({ activityId: Number(activityId) }),
                 });
 
-          if (response.status === 200 || response.status === 204) {
-            location.reload();
-            return;
-          }
+        if (response.ok) {
+          await refresh(activityId, index);
+          say("Saved.");
+          return;
+        }
+        const body = await response.json().catch(() => null);
+        say(body?.error ?? `request failed (${response.status})`);
+      });
 
-          const body = await response.json().catch(() => null);
-          if (status) status.textContent = body?.error ?? `request failed (${response.status})`;
-        });
+      // DESIGN.md "Preview before you pick". The preview block is absolutely
+      // positioned inside its grid area, so it never moves or resizes the
+      // grid. On the phone layout the grid is display:none, so no preview.
+      let previewFor: Element | null = null;
+
+      function gridRow(min: number): number {
+        return Math.min(Math.max(Math.round((min - 480) / 15), 0), 48) + 1;
+      }
+
+      function clearPreview(): void {
+        previewFor = null;
+        document.querySelectorAll(".week-grid-preview").forEach((el) => el.remove());
+        document.querySelectorAll(".week-grid-event-clash").forEach((el) => el.classList.remove("week-grid-event-clash"));
+      }
+
+      function showPreview(target: Element): void {
+        if (target === previewFor) return;
+        clearPreview();
+        const form = target.closest<HTMLFormElement>("form.option-form");
+        const body = document.querySelector<HTMLElement>(".week-grid-body");
+        if (!form || !body || form.dataset.action !== "pick") return;
+        previewFor = target;
+        const { day, start, end, label, reason, clashId } = form.dataset;
+        const block = document.createElement("div");
+        block.className = "week-grid-preview";
+        block.style.gridColumn = String(Number(day) + 1);
+        block.style.gridRow = `${gridRow(Number(start))} / ${gridRow(Number(end))}`;
+        block.textContent = label ?? "";
+        if (reason) {
+          const why = document.createElement("span");
+          why.className = "week-grid-preview-reason";
+          why.textContent = reason;
+          block.append(why);
+        }
+        body.append(block);
+        if (clashId) body.querySelector(`[data-activity-id="${clashId}"]`)?.classList.add("week-grid-event-clash");
+      }
+
+      // Hover lands on .pick-target, not the button: a disabled (clashing)
+      // button gets pointer-events: none, so its wrapper still sees the mouse.
+      main.addEventListener("mouseover", (event) => {
+        const target = (event.target as Element).closest(".pick-target");
+        if (target) showPreview(target);
+      });
+      main.addEventListener("mouseout", (event) => {
+        const target = (event.target as Element).closest(".pick-target");
+        const into = event.relatedTarget as Node | null;
+        if (target && target === previewFor && !(into && target.contains(into))) clearPreview();
+      });
+      main.addEventListener("focusin", (event) => {
+        const target = (event.target as Element).closest(".pick-target");
+        if (target) showPreview(target);
+      });
+      main.addEventListener("focusout", (event) => {
+        const target = (event.target as Element).closest(".pick-target");
+        if (target && target === previewFor) clearPreview();
       });
     </script>
     <style>
       .plan {
         max-width: none;
         width: min(100%, 70rem);
+      }
+
+      /* DESIGN.md "Progress": always at the top, in words. */
+      .progress {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        margin-block: 1rem 0;
+      }
+
+      .progress-line,
+      .progress-complete {
+        margin: 0;
+        font-weight: 600;
+      }
+
+      .fill-form {
+        margin: 0;
+      }
+
+      /* Reserve the status line's height so "Saved." doesn't push the page
+         down when it appears. */
+      #plan-status {
+        min-height: 1.6em;
+        margin-block: 0.5rem 1rem;
       }
 
       .plan-layout {

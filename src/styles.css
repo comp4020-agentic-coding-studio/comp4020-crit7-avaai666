@@ -83,6 +83,43 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* DESIGN.md "Preview before you pick". These elements are made by the
+   page script, so they carry no Astro scope attribute and live here. The
+   block is absolute inside its grid area: it never moves the grid. */
+.week-grid-preview {
+  position: absolute;
+  inset: 1px;
+  z-index: 1;
+  padding: 0.25rem;
+  border: 2px dashed var(--anu-black);
+  border-radius: 0.25rem;
+  background: var(--anu-white);
+  color: var(--anu-unigrey);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.week-grid-preview-reason {
+  display: block;
+  margin-top: 0.25rem;
+  font-weight: 600;
+}
+
+.week-grid-event-clash {
+  outline: 2px dashed var(--anu-black);
+  outline-offset: 2px;
+}
+
+.pick-target {
+  display: inline-flex;
+}
+
+.pick-target button:disabled {
+  pointer-events: none;
+}
+
 #messages {
   padding-inline-start: 1.2rem;
 }
