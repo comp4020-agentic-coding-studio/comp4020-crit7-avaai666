@@ -64,3 +64,66 @@ page at 1920×1080 and 390×844 myself.
 - **How I knew:** The fix diff was exactly those two things, and `pnpm
   check` stayed green.
 - **Citation:** [`36944a7`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/36944a7f8d795d7d41d9ba9b5213ba3846a6279d)
+
+## Working notes (session 7+, to be merged)
+
+### The design said "nothing else", so I changed the design
+- **What happened:** I added Progress, Preview and Fill to DESIGN.md. But
+  "The one flow" still ended "That is the whole product. Nothing else."
+  The agent flagged that my own document now contradicted itself.
+- **What I did instead:** I fixed the document, not the code. One line
+  after the flow now says those three sections are part of the product,
+  in its own commit.
+- **How I knew:** The diff for the first amendment was additions only (49
+  lines, 0 removed), and the second was the one line.
+- **Citation:** [`bc51ac4`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/bc51ac4f657349706e27706982a73a57b13141c7), [`aca5b9f`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/aca5b9f0b5d2020a1f4313d6a84bb207968c7e9e)
+
+### Fill the rest: spec first, and my count checked
+- **What happened:** The bigger catalogue could have broken tests that
+  count seed rows. And "the result is always the same" needed a real
+  answer, not just "two runs agree".
+- **What I did instead:** I gave the agent my count of clash-free
+  completions (238) and asked it to tell me if its count differed. It
+  counted from DESIGN.md's table on its own and got 238. The spec then
+  pinned the exact first completion in listed order.
+- **How I knew:** `git diff HEAD -- spec/` removed 0 lines. The 7 new
+  tests failed for the right reasons, then passed. On the live site a
+  fresh plan said "5 lectures fixed · 0 of 5 choices made", and after
+  POST /api/fill it said "Your timetable is complete — no clashes."
+- **Citation:** [`d9877de`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/d9877de68720231fed88c08612e88edf247431bf), [`a2f3f77`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/a2f3f7785ae57edb0a0b1a60c1610824b61b60e2)
+
+### Chrome showed the preview two days wide
+- **What happened:** Tests and curl were green. In Chrome the preview for
+  COMP4020 CRIT 02 covered Thu and Fri. Its style was
+  "grid-area: 25 / 5 / 31", with no column end.
+- **What I did instead:** I asked for the placement to live in one
+  function used by both the week blocks and the preview, with a test.
+- **How I knew:** 3 new tests failed first, then passed. On my next look
+  in Chrome the width was right.
+- **Citation:** [`31fcc59`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/31fcc593c735a5d30991960914fbf97b539b6b25)
+
+### My bug report was wrong, and the agent checked it
+- **What happened:** I reported that "Saved." never appeared, and guessed
+  the in-place update cleared it. I told the agent to check, not take my
+  word.
+- **What I did instead:** It checked. The status node was never replaced,
+  and in headless Chromium "Saved." appeared. The one step that could
+  silently not run was an animation frame, so it moved the status into a
+  function that writes the text at once, with tests.
+- **How I knew:** The 3 status tests failed first, then passed. Later I
+  found my report came from a background tab (visibilityState: hidden).
+  The new createStatus() works even there.
+- **Citation:** [`4bba53f`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/4bba53f74b3b3136dfa59005cdb80a5257a3132b)
+
+### Side by side, measured
+- **What happened:** The see-through preview on top of the black MATH1005
+  lecture made both labels unreadable.
+- **What I did instead:** I asked for calendar-style halves instead of
+  transparency, with the "which half" decision tested. The agent measured
+  the boxes in headless Chromium, and that caught two bugs the tests
+  didn't: the halves overlapped by 7px, and the grid changed height on
+  hover.
+- **How I knew:** After the fix the grid stayed at 488–1160 before, during
+  and after the hover, and the lecture (987–1037) and preview (1039–1090)
+  didn't overlap. Then I looked in Chrome and said "looks right".
+- **Citation:** [`1a4ea44`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/1a4ea44187097e71d0af5f768db1e0070372cb72)
