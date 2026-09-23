@@ -49,7 +49,11 @@ import {
   ClashError,
   FixedClassError,
   NotFoundError,
+  NoSolutionError,
   optionStatus,
+  progressLine,
+  COMPLETE_MESSAGE,
+  NO_SOLUTION_MESSAGE,
   SEED_CATALOGUE,
   type PlanStore,
 } from "../src/lib/plan-store";
@@ -458,6 +462,189 @@ describe("optionStatus (the shared fits/clashes/picked check)", () => {
         expect((error as ClashError).clashesWith.id).toBe(status.clashesWith.id);
         expect(store.listPicks(planId)).toEqual(picksBefore);
       }
+    }
+  });
+});
+
+// DESIGN.md "Progress" and "Fill the rest for me", added in session 7.
+//
+//   src/lib/plan-store.ts (additions)
+//     PlanStore.progress(planId): { fixed: number; made: number; total: number; complete: boolean }
+//     PlanStore.fill(planId): Activity[]  -- the plan's picks after filling;
+//        throws NoSolutionError (message NO_SOLUTION_MESSAGE) and writes nothing
+//     progressLine(p): "<n> lectures fixed · <k> of <m> choices made"
+//     COMPLETE_MESSAGE = "Your timetable is complete — no clashes."
+
+function expectClashFree(picks: TimeSlot[]): void {
+  for (let i = 0; i < picks.length; i++) {
+    for (let j = i + 1; j < picks.length; j++) {
+      expect(clashes(picks[i], picks[j]), `${JSON.stringify(picks[i])} vs ${JSON.stringify(picks[j])}`).toBe(false);
+    }
+  }
+}
+
+const choiceKey = (a: { courseCode: string; type: string }) => `${a.courseCode} ${a.type}`;
+
+describe("progress", () => {
+  let dir: string;
+  let store: PlanStore;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "crit7-progress-"));
+    store = openPlanStore(join(dir, "test.db"));
+  });
+
+  afterEach(() => {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("a new plan: '5 lectures fixed · 0 of 5 choices made'", () => {
+    const planId = randomUUID();
+
+    const progress = store.progress(planId);
+
+    expect(progress).toEqual({ fixed: 5, made: 0, total: 5, complete: false });
+    expect(progressLine(progress)).toBe("5 lectures fixed · 0 of 5 choices made");
+  });
+
+  it("after picking one of each choice with no clash: complete", () => {
+    const planId = randomUUID();
+    const chosen = [
+      store.findActivity("COMP4020", "CRIT", "02"), // Thu 14:00-15:30
+      store.findActivity("COMP2100", "TUT", "01"), // Wed 16:00-18:00
+      store.findActivity("MATH1005", "TUT", "01"), // Fri 10:00-11:00
+      store.findActivity("STAT1003", "TUT", "01"), // Mon 15:00-16:00 (touches MATH1005 LEC)
+    ];
+    for (const a of chosen) store.pick(planId, a.id);
+    expect(store.progress(planId)).toEqual({ fixed: 5, made: 4, total: 5, complete: false });
+
+    store.pick(planId, store.findActivity("COMP2310", "LAB", "01").id); // Tue 12:00-14:00
+
+    const progress = store.progress(planId);
+    expect(progress).toEqual({ fixed: 5, made: 5, total: 5, complete: true });
+    expect(progressLine(progress)).toBe("5 lectures fixed · 5 of 5 choices made");
+    expect(COMPLETE_MESSAGE).toBe("Your timetable is complete — no clashes.");
+  });
+});
+
+describe("fill the rest for me", () => {
+  let dir: string;
+  let store: PlanStore;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "crit7-fill-"));
+    store = openPlanStore(join(dir, "test.db"));
+  });
+
+  afterEach(() => {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("on a new plan, produces a complete, clash-free timetable", () => {
+    const planId = randomUUID();
+
+    const picks = store.fill(planId);
+
+    expect(store.listPicks(planId)).toEqual(picks);
+    expect(store.progress(planId).complete).toBe(true);
+    const choiceKeys = new Set(SEED_CATALOGUE.map(choiceKey));
+    expect(new Set(picks.map(choiceKey))).toEqual(choiceKeys);
+    expectClashFree(picks);
+  });
+
+  it("tries groups in listed order, so two new plans get identical results", () => {
+    const planA = randomUUID();
+    const planB = randomUUID();
+
+    const a = store.fill(planA).map((x) => x.id);
+    const b = store.fill(planB).map((x) => x.id);
+
+    expect(a).toEqual(b);
+    // The first clash-free completion in DESIGN.md's listed order.
+    const nonFixed = store
+      .listPicks(planA)
+      .filter((x) => !x.fixed)
+      .map((x) => `${x.courseCode} ${x.type} ${x.group}`);
+    expect(nonFixed.sort()).toEqual(
+      ["COMP4020 CRIT 01", "COMP2100 TUT 02", "MATH1005 TUT 01", "STAT1003 TUT 01", "COMP2310 LAB 01"].sort(),
+    );
+  });
+
+  it("never changes a pick already made", () => {
+    const planId = randomUUID();
+    const crit03 = store.findActivity("COMP4020", "CRIT", "03"); // Fri 10:00-11:30, not the first listed
+    const tut04 = store.findActivity("COMP2100", "TUT", "04"); // Fri 12:00-14:00
+    store.pick(planId, crit03.id);
+    store.pick(planId, tut04.id);
+    const before = store.listPicks(planId).map((a) => a.id);
+
+    const after = store.fill(planId).map((a) => a.id);
+
+    for (const id of before) expect(after).toContain(id);
+    expect(store.progress(planId).complete).toBe(true);
+    expectClashFree(store.listPicks(planId));
+  });
+
+  it("with a pick that makes finishing impossible, throws NoSolutionError and writes nothing", () => {
+    const planId = randomUUID();
+    const custom: ActivitySeed[] = [
+      { courseCode: "TEST3000", courseTitle: "Test A", type: "TUT", group: "01", day: MON, startMin: 600, endMin: 660 },
+      { courseCode: "TEST3000", courseTitle: "Test A", type: "TUT", group: "02", day: TUE, startMin: 600, endMin: 660 },
+      // Both TEST3001 groups overlap TEST3000 TUT 01 on Monday.
+      { courseCode: "TEST3001", courseTitle: "Test B", type: "TUT", group: "01", day: MON, startMin: 600, endMin: 660 },
+      { courseCode: "TEST3001", courseTitle: "Test B", type: "TUT", group: "02", day: MON, startMin: 630, endMin: 690 },
+    ];
+    const fillDir = mkdtempSync(join(tmpdir(), "crit7-nosolution-"));
+    const fillStore = openPlanStore(join(fillDir, "test.db"), custom);
+    try {
+      fillStore.pick(planId, fillStore.findActivity("TEST3000", "TUT", "01").id);
+      const before = fillStore.listPicks(planId);
+
+      let error: unknown;
+      try {
+        fillStore.fill(planId);
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error).toBeInstanceOf(NoSolutionError);
+      expect((error as Error).message).toBe(NO_SOLUTION_MESSAGE);
+      expect(NO_SOLUTION_MESSAGE).toBe(
+        "No clash-free way to fill the rest while keeping your current picks. Try removing one.",
+      );
+      expect(fillStore.listPicks(planId)).toEqual(before);
+    } finally {
+      fillStore.close();
+      rmSync(fillDir, { recursive: true, force: true });
+    }
+  });
+
+  it("a DB seeded with the old catalogue gains the new rows on reopen (upsert reaches production)", () => {
+    const newCourses = new Set(["STAT1003", "COMP2310"]);
+    const newRows = new Set(["COMP2100 TUT 04", "MATH1005 TUT 03"]);
+    const oldSeed = SEED_CATALOGUE.filter(
+      (s) => !newCourses.has(s.courseCode) && !newRows.has(`${s.courseCode} ${s.type} ${s.group}`),
+    );
+    const seedDir = mkdtempSync(join(tmpdir(), "crit7-grow-"));
+    const dbPath = join(seedDir, "test.db");
+    const planId = randomUUID();
+    try {
+      const oldStore = openPlanStore(dbPath, oldSeed);
+      const crit02 = oldStore.findActivity("COMP4020", "CRIT", "02");
+      oldStore.pick(planId, crit02.id);
+      expect(oldStore.progress(planId)).toEqual({ fixed: 3, made: 1, total: 3, complete: false });
+      oldStore.close();
+
+      const upserted = openPlanStore(dbPath, SEED_CATALOGUE);
+      expect(upserted.listActivities()).toHaveLength(SEED_CATALOGUE.length);
+      expect(upserted.findActivity("STAT1003", "LEC", "01").fixed).toBe(true);
+      expect(upserted.listPicks(planId).map((a) => a.id)).toContain(crit02.id);
+      expect(upserted.progress(planId)).toEqual({ fixed: 5, made: 1, total: 5, complete: false });
+      upserted.close();
+    } finally {
+      rmSync(seedDir, { recursive: true, force: true });
     }
   });
 });
