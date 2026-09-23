@@ -135,6 +135,59 @@ towards the word count and don't replace the citation.
   replaced the container, so it was reading the volume, not the image.
 - **Citation:** [`bc7ec25`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/bc7ec253bc9d8281f4a9ff49f35760df30558045)
 
+### Lectures come first meant DESIGN.md had to say so before code did
+- **What happened:** the seed catalogue never had a "fixed" concept. Adding
+  one straight into the picker code would have made the code the source of
+  truth instead of the doc, which CLAUDE.md rules out.
+- **What I did instead:** wrote "Lectures come first" and moved MATH1005's
+  lecture time in DESIGN.md first, updated the spec to match, and only then
+  changed the picker code — three separate commits, in that order.
+- **How I knew:** `git log` shows DESIGN, then spec, then implementation.
+  Two spec assertions I'd missed the first time only broke once the
+  implementation was real; I had those explained and fixed in their own
+  commit before `plan-store.ts` changed.
+- **Citation:** [`2e209d2`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/2e209d2624f82c85ac79dfc0753fc8835ae06052), [`6a37dcb`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/6a37dcbae37b0e1f5f89bbab2940405c12daaf8e), [`f60aa6e`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/f60aa6e83830dea150d4959996cd945e479cbc11), [`bc7458d`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/bc7458d55f4bc46a2465571009bf0959d8285098)
+
+### Upsert stopped a deploy that would have shipped the old lecture time
+- **What happened:** the catalogue was seeded once, only on an empty
+  database. That's fine until a seed value changes — a database that
+  already has rows would never notice the MATH1005 lecture moved.
+- **What I did instead:** had seed-if-empty replaced with an upsert keyed
+  on course/type/group, so every server start reconciles the database to
+  whatever's in DESIGN.md's table, not just the first one ever run.
+- **How I knew:** ran the full suite after the change — 53 passed, 0
+  typecheck errors — then checked the deployed site directly: `GET /`
+  showed MATH1005 LEC 01 at the new Mon 14:00–15:00 time, on a machine
+  that already had the old catalogue sitting in its volume before this
+  deploy.
+- **Citation:** [`bc7458d`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/bc7458d55f4bc46a2465571009bf0959d8285098)
+
+### The palette came with its own accessibility rule, not just colours
+- **What happened:** DESIGN.md's Look section named the ANU palette and
+  one exception for disabled text, but "AA for text under 24px" isn't a
+  colour, it's a ratio.
+- **What I did instead:** instead of picking a grey that looked about
+  right, had the exact relative-luminance contrast computed for candidate
+  greys before choosing one, and had that number written into the
+  stylesheet next to the variable so the reasoning doesn't disappear.
+- **How I knew:** the number is in the CSS comment — `#666666` on white,
+  5.74:1, clear of the 4.5:1 floor. I know this repo's own tests turn
+  axe-core's contrast check off, so this had to be checked by hand or not
+  checked at all.
+- **Citation:** [`dd192ae`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/dd192aeaf73bfa086cf267545d12226dbe07d2d2)
+
+### The click-through caught two things no test could
+- **What happened:** `pnpm check` was green and the manual curl checks all
+  matched, but the week grid's time column was empty, and the phone list
+  showed a bullet on some rows and not others.
+- **What I did instead:** looked at the actual click-through instead of
+  taking a green test run as "looks right," named both issues specifically,
+  and had them fixed in one commit before deploying.
+- **How I knew:** the fix commit's diff was exactly those two things — hour
+  labels placed on the same grid rows the events use, and one list-style
+  rule removing every list's marker — and `pnpm check` stayed green after.
+- **Citation:** [`36944a7`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/36944a7f8d795d7d41d9ba9b5213ba3846a6279d)
+
 ## Before you ship
 
 `pnpm check:evidence` verifies that this comment is gone, that your citations
