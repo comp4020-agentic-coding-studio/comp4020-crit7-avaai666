@@ -48,8 +48,8 @@ An activity type with exactly one group is fixed. In the seed, that is
 every LEC.
 
 - Fixed classes are in your week from your first visit. You don't pick them.
-- They can't be removed or swapped. Instead of a button they show
-  "Fixed · lecture".
+- They can't be removed or swapped. Instead of a button they show a
+  "Fixed" pill.
 - Everything else is checked against them. A tutorial or crit that clashes
   with a lecture is unavailable from the start, with the reason in words:
   "clashes with lecture MATH1005 LEC 01 (Mon 14:00–15:00)".
@@ -201,6 +201,60 @@ Colours follow the ANU web style guide palette
   clashing = greyed text, disabled button, the reason in words.
 - System font stack. No web fonts. No external requests.
 - Focus ring visible on every button (2px black outline with offset).
+
+## Look, version 2
+
+Layout
+- Max content width 1200px, centred. Course list left (~45%), week right
+  (~55%) on desktop. The week column is sticky (top: 16px) so it stays in
+  view while you scroll the course list.
+- Each course is a card: white, 1px #E5E5E5 border, 8px radius, 16px
+  padding. Course code in bold, title next to it in Unigrey.
+- Activity type (LEC, TUT, LAB, CRIT) is a small uppercase label with
+  letter-spacing, not a heading.
+- Each group row: time · group · status · button, aligned in columns.
+  Row height ≥ 44px (touch target).
+
+Buttons
+- Pick: black 1px border, white fill, black text. Hover/focus: black fill,
+  white text.
+- Remove: text-style button, underlined, Unigrey.
+- Disabled Pick: no border, grey text, not-allowed cursor. The clash
+  reason sits on the same row where it fits, under it where it doesn't.
+- "Fill the rest for me": the one primary button on the page. Black fill,
+  white text, 4px gold bottom border.
+
+Status words
+- "fits" → no word needed; the enabled Pick button is enough. Remove
+  "fits" text.
+- Picked → small "Picked" pill (gold-tint background, black text).
+- Fixed lecture → small "Fixed" pill (black background, white text).
+- Clash → the reason, in grey, starting with "Clashes with".
+
+Progress
+- Progress line becomes a bar under the page title: a thin track with a
+  black fill for k/m, and the words next to it. Complete → the words are
+  "Your timetable is complete — no clashes." with a black check mark.
+
+Week
+- Light hour lines every hour, lighter half-hour lines.
+- Block text: course code bold on line 1, type+group on line 2, time on
+  line 3. Truncate with an ellipsis, never overflow.
+- A small legend under the week: Lecture (black), Picked (gold tint with
+  gold edge), Preview (dashed outline). Words, not only swatches.
+
+Type
+- System font stack. Title 32px, course code 18px, body 16px, labels 12px
+  uppercase. Line height 1.4.
+
+How version 2 fits the rest of this file:
+- An enabled Pick button is the 'fits' mark from The one flow.
+- "Clashes with" is capitalised on the page only, with CSS. The text
+  itself, and the server's refusal, still start "clashes with".
+- The count line is always shown. When complete, the check mark and
+  "Your timetable is complete — no clashes." are added to it.
+- A picked row has no tint; the "Picked" pill is the mark. This replaces
+  "gold-tint row" in the Options rule above.
 
 # Not in scope
 
