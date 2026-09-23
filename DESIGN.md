@@ -1,0 +1,103 @@
+# What this is
+
+A clash-aware class picker. It rebuilds one slice of ANU class registration
+(ISIS / MyTimetable): choosing which lecture, tutorial or crit group you go
+to for each course.
+
+# What annoys me about the real one
+
+Enrolment week is the worst week. Everyone logs in at once. The site slows
+down, keeps loading, or freezes.
+
+When it does load, I still can't see all my class times in one place. I check
+lectures and tutorials against each other by hand. It is easy to miss a clash.
+
+Usually I find the clash after I've picked. By then the good tutorial groups
+are full, and I start again.
+
+My version does not fix the load. That is a server capacity problem, not a
+design problem. It fixes the part a design can fix: every clash is visible
+before you pick, written in words, on one screen.
+
+# The one flow
+
+1. You see each course, and under it each activity type (LEC, TUT, CRIT...).
+2. Under each activity type you see every group, with its day and time.
+3. Every group is marked BEFORE you pick it:
+     - "fits", or
+     - "clashes with <COURSE> <TYPE> <GROUP> (<Day> <start>–<end>)"
+   A clashing group cannot be picked. The reason is written out, in words,
+   next to it. Not only a colour.
+4. Picking a group saves it immediately. No save button.
+5. Picking a different group of the same activity type swaps it.
+6. Any pick can be removed.
+7. Your week shows every group you picked.
+8. Reload the page: your picks are still there.
+
+That is the whole product. Nothing else.
+
+# The clash rule
+
+Two classes clash when they are on the same day and their times overlap:
+
+    a.day == b.day  AND  a.start < b.end  AND  b.start < a.end
+
+Touching is not a clash. A class ending at 13:00 and one starting at 13:00
+fit together.
+
+When you swap a group, the group being replaced does not count as a clash
+with its replacement.
+
+The server checks the rule again on every pick. It never trusts the page.
+A clashing pick is refused with HTTP 409 and a message naming the class it
+clashes with. Nothing is written.
+
+# Whose plan is it
+
+No login. The first visit gets a random plan id in a cookie
+(httpOnly, SameSite=Lax, one year). Picks belong to that plan id.
+Two browsers are two independent plans.
+
+# Data
+
+Times are stored as minutes after midnight. Days are 1–5 (Mon–Fri).
+
+    course    (code, title)
+    activity  (id, course_code, type, group, day, start_min, end_min)
+    pick      (plan_id, activity_id)
+              one pick per (plan_id, course_code, type)
+
+The catalogue is seeded from the table below. It is DEMO data. The page
+says so, visibly: "Demo timetable — times are invented."
+
+    COMP4020  Agentic Coding Studio
+      LEC  01  Mon 11:00–13:00
+      CRIT 01  Wed 15:30–17:00
+      CRIT 02  Thu 14:00–15:30
+      CRIT 03  Fri 10:00–11:30
+    COMP2100  Software Design Methodologies
+      LEC  01  Tue 09:00–11:00
+      TUT  01  Wed 16:00–18:00
+      TUT  02  Thu 15:00–17:00
+      TUT  03  Mon 13:00–15:00
+    MATH1005  Discrete Mathematical Models
+      LEC  01  Mon 12:00–13:00
+      TUT  01  Fri 10:00–11:00
+      TUT  02  Tue 11:00–12:00
+
+These are chosen on purpose: some groups clash, some only touch.
+
+# Layout
+
+Desktop (1920×1080): the week as a grid, Mon–Fri, 08:00–20:00, beside the
+course list.
+Phone (390×844): no grid. The week is a list, grouped by day, below the
+course list. No horizontal scroll.
+
+Keyboard works: every pick and remove is a real button.
+
+# Not in scope
+
+Login. ANU SSO. Real ANU data. Scraping any ANU site. Capacity / full
+groups. Waitlists. Multiple semesters. Notifications. Dark mode. Anything
+not listed in "The one flow".
