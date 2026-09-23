@@ -16,12 +16,16 @@ commits.
 
 ## What did this work change about who I want to be as a software developer?
 
-I want to write down what "done" means before anything gets built.
+I want to write down what "done" means before anything gets built, and
+then check it the boring way.
 
-The tests caught the clash rule. They didn't catch an empty time column.
-That was found by opening the page. The agent also guessed commit hashes
-to fill links. They looked right.
+The tests caught the clash rule. They didn't catch an empty time column,
+or a preview two columns wide. Those were found by opening the page. So I
+turned each one into a browser check. Now the agent has to pass them too.
+
+I was wrong once as well. I reported a bug that was really my background
+tab. The agent checked instead of believing me. That's what I asked it to
+do, and I want to do the same with its reports.
 
 The things that look right when they're wrong are the boring ones: a
-hash, an hour label, whether the data survives a second deploy. I want to
-be the person who checks those.
+hash, an hour label, a second deploy. I want to be the person who checks.
