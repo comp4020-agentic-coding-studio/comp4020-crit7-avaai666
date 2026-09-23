@@ -107,11 +107,11 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
             courseOrder.map((code) => (
               <section class="course">
                 <h2>
-                  {code} {titleByCode.get(code)}
+                  <span class="course-code">{code}</span> <span class="course-title">{titleByCode.get(code)}</span>
                 </h2>
                 {groupByType(byCourse.get(code)!).map(([type, options]) => (
                   <div class="activity-type">
-                    <h3>{type}</h3>
+                    <p class="activity-type-label">{type}</p>
                     <ul class="options">
                       {options.map((activity) => {
                         const status = optionStatus(picks, activity);
@@ -120,11 +120,12 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
                             <li class="option" data-status="fixed">
                               <div class="option-form">
                                 <span class="option-time">
-                                  {DAY_NAMES[activity.day]} {formatTime(activity.startMin)}–
-                                  {formatTime(activity.endMin)}
+                                  {DAY_NAMES[activity.day]} {formatTime(activity.startMin)}–{formatTime(activity.endMin)}
                                 </span>
                                 <span class="option-group">Group {activity.group}</span>
-                                <span class="option-label">Fixed · lecture</span>
+                                <span class="option-status">
+                                  <span class="pill pill-fixed">Fixed</span>
+                                </span>
                               </div>
                             </li>
                           );
@@ -149,16 +150,22 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
                                 {DAY_NAMES[activity.day]} {formatTime(activity.startMin)}–{formatTime(activity.endMin)}
                               </span>
                               <span class="option-group">Group {activity.group}</span>
+                              <span class="option-status">
+                                {picked ? (
+                                  <span class="pill pill-picked">Picked</span>
+                                ) : reason ? (
+                                  <span class="option-reason">{reason}</span>
+                                ) : null}
+                              </span>
                               {picked ? (
-                                <button type="submit">Remove</button>
+                                <button type="submit" class="button-remove">Remove</button>
                               ) : (
                                 <span class="pick-target">
-                                  <button type="submit" disabled={clash !== null}>
+                                  <button type="submit" class="button-pick" disabled={clash !== null}>
                                     Pick
                                   </button>
                                 </span>
                               )}
-                              <span class="option-label">{picked ? "Picked" : reason ?? "fits"}</span>
                             </form>
                           </li>
                         );
@@ -380,9 +387,10 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
       });
     </script>
     <style>
+      /* Look v2 "Layout": 1200px max, centred. */
       .plan {
         max-width: none;
-        width: min(100%, 70rem);
+        width: min(100%, 1200px);
       }
 
       /* DESIGN.md "Progress": always at the top, in words. */
@@ -407,7 +415,7 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
       /* Reserve the status line's height so "Saved." doesn't push the page
          down when it appears. */
       #plan-status {
-        min-height: 1.6em;
+        min-height: 1.4em;
         margin-block: 0.5rem 1rem;
       }
 
@@ -422,13 +430,41 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
         min-width: 0;
       }
 
-      .course h2 {
-        margin-bottom: 0.25rem;
+      /* Look v2: each course is a card. It is also a size container, so a
+         row can decide by its own card's width whether the clash reason
+         fits on the row or goes under it. */
+      .course {
+        container-type: inline-size;
+        margin-block-end: 16px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--anu-white);
       }
 
-      .activity-type h3 {
-        margin-block: 0.5rem 0.25rem;
-        font-size: 1rem;
+      .course h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+        line-height: 1.4;
+      }
+
+      .course-code {
+        font-weight: 700;
+        color: var(--anu-black);
+      }
+
+      .course-title {
+        font-weight: 400;
+        color: var(--anu-unigrey);
+      }
+
+      /* Look v2: the activity type is a small uppercase label, not a heading. */
+      .activity-type-label {
+        margin: 12px 0 4px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
         color: var(--anu-unigrey);
       }
 
@@ -438,57 +474,87 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
         margin: 0;
       }
 
-      .option {
-        margin-block-end: 0.4rem;
-        padding: 0.15rem 0.4rem;
+      /* Look v2: time · group · status · button, in columns, rows >= 44px. */
+      .option-form {
+        display: grid;
+        grid-template-columns: 8.5rem 5rem minmax(0, 1fr) auto;
+        grid-template-areas: "time group status button";
+        align-items: center;
+        column-gap: 0.75rem;
+        min-height: 44px;
+        margin: 0;
+        border-top: 1px solid var(--line);
       }
 
-      .option-form {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem;
-        margin: 0;
+      .option:first-child .option-form {
+        border-top: 0;
       }
 
       .option-time {
-        min-width: 11rem;
+        grid-area: time;
+        white-space: nowrap;
       }
 
       .option-group {
-        min-width: 6rem;
+        grid-area: group;
+        white-space: nowrap;
       }
 
-      /* DESIGN.md "Look", Options: "picked" = gold-tint row + "Picked" text. */
-      .option[data-status="picked"] {
-        background: var(--anu-gold-tint);
+      .option-status {
+        grid-area: status;
+        min-width: 0;
       }
 
-      .option[data-status="picked"] .option-label {
-        color: var(--anu-unigrey);
+      .option-form > button,
+      .option-form > .pick-target {
+        grid-area: button;
+        justify-self: end;
+      }
+
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
         font-weight: 600;
+        line-height: 1.4;
       }
 
-      /* Fixed classes read the same as "picked" — they're in the plan too,
-         just with nothing to remove. */
-      .option[data-status="fixed"] {
+      .pill-picked {
         background: var(--anu-gold-tint);
+        color: var(--anu-black);
       }
 
-      .option[data-status="fixed"] .option-label {
-        color: var(--anu-unigrey);
-        font-weight: 600;
+      .pill-fixed {
+        background: var(--anu-black);
+        color: var(--anu-white);
       }
 
-      /* DESIGN.md "Look", Options: clashing = greyed text (--disabled-grey
-         passes WCAG AA on white, 5.74:1), disabled button, reason in words —
-         colour is never the only signal. */
+      /* Clash: the reason in grey (--disabled-grey, 5.74:1 on white). The
+         text is clashReason()'s, the same words the server refuses with;
+         only the first letter is capitalised, on screen. */
+      .option-reason {
+        display: block;
+        color: var(--disabled-grey);
+        font-size: 14px;
+      }
+
+      .option-reason::first-letter {
+        text-transform: uppercase;
+      }
+
       .option[data-status="clashes"] {
         color: var(--disabled-grey);
       }
 
-      .option[data-status="clashes"] .option-label {
-        color: var(--disabled-grey);
+      /* Where the reason doesn't fit on the row, it goes under it. */
+      @container (max-width: 640px) {
+        .option[data-status="clashes"] .option-form {
+          grid-template-areas:
+            "time group . button"
+            "status status status status";
+          padding-block-end: 8px;
+        }
       }
 
       .week-grid {
@@ -601,20 +667,41 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
           align-items: flex-start;
         }
 
+        /* Look v2 "Layout": list ~45%, week ~55%, week sticky at 16px. */
         .course-list {
-          flex: 1 1 28rem;
+          flex: 45 1 0;
         }
 
         .week {
-          flex: 1 1 32rem;
+          flex: 55 1 0;
           position: sticky;
-          top: 1rem;
+          top: 16px;
         }
       }
 
       @media (max-width: 700px) {
         .week-grid {
           display: none;
+        }
+
+        /* Phone rows: slightly smaller text so time, group, status and
+           button still fit one line in a 390px screen's card. */
+        .option-form {
+          grid-template-columns: 7.75rem 4rem minmax(0, 1fr) auto;
+          column-gap: 0.4rem;
+          font-size: 14px;
+        }
+
+        .button-pick {
+          padding-inline: 0.75rem;
+        }
+
+        .button-remove {
+          padding-inline: 0;
+        }
+
+        .pill {
+          padding-inline: 6px;
         }
 
         /* The status line sits near the top, off-screen once you've

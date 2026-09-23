@@ -1,8 +1,8 @@
-/* DESIGN.md "Look": the ANU web style guide palette, and nothing else.
-   --disabled-grey isn't in that palette — it's the one named exception
-   DESIGN.md allows, for text that must stay readable when greyed out.
-   #666666 on white is a 5.74:1 contrast ratio, comfortably over WCAG AA's
-   4.5:1 for text under 24px. */
+/* DESIGN.md "Look": the ANU web style guide palette, plus exactly two
+   named extras. --disabled-grey is for text that must stay readable when
+   greyed out: #666666 on white is 5.74:1, over WCAG AA's 4.5:1 for text
+   under 24px. --line is Look v2's card border and grid-line colour,
+   #E5E5E5; it is never used for text. */
 :root {
   --anu-gold: #be830e;
   --anu-gold-tint: #f5edde;
@@ -10,15 +10,23 @@
   --anu-white: #ffffff;
   --anu-unigrey: #333333;
   --disabled-grey: #666666;
+  --line: #e5e5e5;
 }
 
+/* Look v2 "Type": system font stack, body 16px, line height 1.4. */
 body {
   margin: 0;
   padding: 0 2rem 2rem;
   font-family: system-ui, sans-serif;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.4;
   color: var(--anu-unigrey);
   background: var(--anu-white);
+}
+
+h1 {
+  font-size: 32px;
+  line-height: 1.2;
 }
 
 main {
@@ -51,6 +59,18 @@ a {
   font-size: 0.875rem;
 }
 
+/* Phone: a 16px side gutter. The header's negative margin matches it. */
+@media (max-width: 700px) {
+  body {
+    padding: 0 16px 16px;
+  }
+
+  .site-header {
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+}
+
 nav[aria-label="site"] {
   display: flex;
   gap: 1rem;
@@ -81,6 +101,56 @@ button {
 button:focus-visible {
   outline: 2px solid var(--anu-black);
   outline-offset: 2px;
+}
+
+/* Look v2 "Buttons". Pick: outlined, fills black on hover/focus. */
+.button-pick {
+  min-height: 36px;
+  border: 1px solid var(--anu-black);
+  border-radius: 4px;
+  background: var(--anu-white);
+  color: var(--anu-black);
+  cursor: pointer;
+}
+
+.button-pick:hover,
+.button-pick:focus-visible {
+  background: var(--anu-black);
+  color: var(--anu-white);
+}
+
+/* Disabled Pick: no border, grey text. The button itself has
+   pointer-events: none (for the preview), so its wrapper shows the cursor. */
+.button-pick:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: var(--disabled-grey);
+}
+
+.pick-target:has(.button-pick:disabled) {
+  cursor: not-allowed;
+}
+
+/* Remove: a text-style button. */
+.button-remove {
+  padding-inline: 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--anu-unigrey);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* "Fill the rest for me": the one primary button. */
+.fill-form button {
+  padding: 0.5rem 1rem;
+  border: 0;
+  border-bottom: 4px solid var(--anu-gold);
+  border-radius: 4px;
+  background: var(--anu-black);
+  color: var(--anu-white);
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* DESIGN.md "Preview before you pick". These elements are made by the
