@@ -36,3 +36,29 @@ work around it.
 - After each piece: run the tests and `pnpm check`, paste the real output.
 - You have no browser. When a change affects what the page looks like, tell
   me exactly what to click and at which viewport, and wait for me.
+
+## Process log (every session)
+
+PROCESS.md grows as we work. At the END of every session:
+1. Append this session's moments under "## Moments (working)".
+2. Every moment does four things:
+   - what happened (the problem, or what the agent got wrong)
+   - what I did instead of the obvious thing, and why it was better
+   - how I knew it was right (the check that was run, the viewport that was
+     looked at, the diff that was read)
+   - citation: [<short hash>](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/<full hash>)
+3. Only real events from this session, with real hashes from `git log`.
+   No moment without a commit. Do not invent feelings or reasons; use the
+   decisions stated in my prompts.
+4. Voice: first person (Ava). Short, plain sentences. No "leveraged",
+   "robust", "seamless", "journey".
+5. Commit it on its own: "C7: PROCESS — session N moments".
+
+Word budget: the FINAL PROCESS.md is 400–550 words. The working list may
+be longer. The final trim happens in the last session and keeps, in this
+order: harness changes (a CLAUDE.md rule, a new test, a DESIGN amendment,
+a thrown-away attempt) > things I caught by looking that no check caught >
+everything else. Re-prompts alone are cut first.
+
+reflections/crit-7.md is written in the last session, 150–300 words.
+PROCESS.md and reflections/ never appear on the deployed site.
