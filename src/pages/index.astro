@@ -59,6 +59,11 @@ const GRID_ROWS = ((20 - 8) * 60) / 15;
 function gridRow(min: number): number {
   return Math.min(Math.max(Math.round((min - GRID_START_MIN) / 15), 0), GRID_ROWS) + 1;
 }
+
+// Hour labels for the grid's time gutter, 08:00 through 20:00 — every label
+// lines up with the row it names (the 20:00 label sits at the bottom of the
+// last row rather than starting a nonexistent 49th one).
+const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
 ---
 
 <!doctype html>
@@ -150,6 +155,14 @@ function gridRow(min: number): number {
               ))}
             </div>
             <div class="week-grid-body" style={`grid-template-rows: repeat(${GRID_ROWS}, 1fr);`}>
+              {HOURS.map((h) => (
+                <div
+                  class="week-grid-hour"
+                  style={`grid-column: 1; grid-row: ${h === 20 ? GRID_ROWS : gridRow(h * 60)} / span 1; align-self: ${h === 20 ? "end" : "start"};`}
+                >
+                  {String(h).padStart(2, "0")}:00
+                </div>
+              ))}
               {picks.map((activity) => (
                 <div
                   class={`week-grid-event ${activity.fixed ? "week-grid-event-fixed" : "week-grid-event-picked"}`}
@@ -332,6 +345,17 @@ function gridRow(min: number): number {
         min-height: 30rem;
       }
 
+      /* Time gutter: one label per hour line, right-aligned against the
+         3rem column so it reads like an axis next to the grid. */
+      .week-grid-hour {
+        grid-column: 1;
+        padding-inline-end: 0.35rem;
+        font-size: 0.7rem;
+        line-height: 1;
+        color: var(--anu-unigrey);
+        text-align: right;
+      }
+
       .week-grid-event {
         margin: 1px;
         padding: 0.25rem;
@@ -361,6 +385,16 @@ function gridRow(min: number): number {
         list-style: none;
         padding: 0;
         display: none;
+      }
+
+      /* The day's picks list had no list-style of its own, so the browser
+         default bullet showed up — but only visibly on light backgrounds;
+         a white marker on the black lecture blocks blended into the page's
+         white background instead. Same rule for every item either way. */
+      .week-list ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
       }
 
       .week-list h3 {
