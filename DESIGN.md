@@ -33,6 +33,10 @@ before you pick, written in words, on one screen.
 6. Any pick can be removed.
 7. Your week shows every group you picked.
 8. Reload the page: your picks are still there.
+9. Picking, removing or filling updates the page in place. It does not
+   reload, the scroll position stays where it was, keyboard focus stays
+   on (or next to) the button you pressed, and a status line says
+   "Saved." or the error, in an aria-live region.
 
 That is the whole product. Nothing else.
 
@@ -75,6 +79,37 @@ Nothing is written.
 The page's "fits" / "clashes with ..." label and the server's refusal
 come from the same function. They cannot disagree.
 
+# Progress
+
+A "choice" is a course+type that is not fixed (every TUT, LAB, CRIT).
+The top of the page always says, in words:
+  "<n> lectures fixed · <k> of <m> choices made"
+and, when k = m and nothing clashes:
+  "Your timetable is complete — no clashes."
+
+# Preview before you pick
+
+Hovering or keyboard-focusing a Pick button shows where that class
+would land in the week: a dashed outline block at its day and time.
+If it clashes, the block it clashes with is outlined too, and the
+preview says "clashes with ...". Moving away removes the preview.
+Nothing is saved by previewing. On the phone list layout there is no
+preview; the words next to the button already say it.
+
+# Fill the rest for me
+
+One button: "Fill the rest for me". It finds groups for every choice
+you haven't made, so that nothing clashes, and saves them all at once.
+- It never changes a pick you already made, and never touches a fixed
+  class.
+- It tries groups in the order they are listed, so the result is
+  always the same for the same starting point.
+- If there is no clash-free way to finish while keeping your picks, it
+  saves nothing and says so: "No clash-free way to fill the rest while
+  keeping your current picks. Try removing one."
+- The server does the search. POST /api/fill → 200 with the new picks,
+  or 409 with that message.
+
 # Whose plan is it
 
 No login. The first visit gets a random plan id in a cookie
@@ -107,10 +142,24 @@ says so, visibly: "Demo timetable — times are invented."
       TUT  01  Wed 16:00–18:00
       TUT  02  Thu 15:00–17:00
       TUT  03  Mon 13:00–15:00
+      TUT  04  Fri 12:00–14:00
     MATH1005  Discrete Mathematical Models
       LEC  01  Mon 14:00–15:00
       TUT  01  Fri 10:00–11:00
       TUT  02  Tue 11:00–12:00
+      TUT  03  Wed 12:00–13:00
+    STAT1003  Statistical Techniques
+      LEC  01  Wed 09:00–11:00
+      TUT  01  Mon 15:00–16:00
+      TUT  02  Wed 11:00–12:00
+      TUT  03  Thu 12:00–13:00
+      TUT  04  Fri 13:00–14:00
+    COMP2310  Systems, Networks and Concurrency
+      LEC  01  Thu 09:00–11:00
+      LAB  01  Tue 12:00–14:00
+      LAB  02  Wed 13:00–15:00
+      LAB  03  Thu 11:00–13:00
+      LAB  04  Fri 14:00–16:00
 
 These are chosen on purpose: some groups clash, some only touch.
 
