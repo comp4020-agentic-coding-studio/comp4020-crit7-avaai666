@@ -36,6 +36,7 @@ work around it.
 - After each piece: run the tests and `pnpm check`, paste the real output.
 - You have no browser. When a change affects what the page looks like, tell
   me exactly what to click and at which viewport, and wait for me.
+- Before saying a UI change is done, run `pnpm test:e2e` and paste it.
 
 ## Process log (every session)
 
