@@ -81,6 +81,33 @@ towards the word count and don't replace the citation.
   --stat` showed only additions to the spec.
 - **Citation:** [`7a284f7`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/7a284f7ae1ecca411847fb0deb595a4315968c9e), [`7515b30`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/7515b307d181dd56c0130835dcee62bd59362400)
 
+### The seed data wasn't there until I asked for it
+- **What happened:** I queried the dev server's throwaway database directly
+  to check the seed catalogue before writing curl bodies for the API tests.
+  It came back empty, even though `GET /` had already loaded fine.
+- **What I did instead:** I didn't assume the seed was broken. `GET /` only
+  touches the guestbook's own DB module, never `plan.ts`, so the activity
+  table is seeded on its first real use, not at server start. I issued a
+  `GET /api/picks` first, then re-queried and got the 11 seeded rows.
+- **How I knew:** The re-query matched the seed catalogue exactly, ids 1-11
+  in insertion order, so I built the 8 curl scenarios against real ids
+  instead of guessed ones.
+- **Citation:** [`4057f1b`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/4057f1b081f629819bfafcda5900dd310bd57e81)
+
+### I curled a real pick before trusting the page
+- **What happened:** `/plan` rendered cleanly with zero picks, every option
+  "fits". That's the easy case. It doesn't prove the picked/clash rendering
+  or the week grid actually work.
+- **What I did instead:** Rather than read the template and assume it was
+  right, I posted a real pick through `/api/picks`, reloaded `/plan` with
+  the same cookie, and grepped the HTML for the disabled button, the
+  "clashes with ..." text, and the week grid/list entries.
+- **How I knew:** The grep showed `data-status="picked"` with a Remove
+  button on the picked class, `data-status="clashes"` with `disabled` and
+  the exact clash wording on the class it blocks, and the picked class in
+  both the grid and the day list.
+- **Citation:** [`2bb7938`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-avaai666/commit/2bb7938c28cd2c3ce33832537b7a5ef3c75d0df9)
+
 ## Before you ship
 
 `pnpm check:evidence` verifies that this comment is gone, that your citations
