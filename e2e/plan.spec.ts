@@ -149,3 +149,27 @@ test.describe("at 390×844", () => {
     await expect(toast).toBeInViewport();
   });
 });
+
+// Session 8: a wrong address must still look like this site and lead back to the plan.
+test("11. unknown address: 404 in the same look, with a way back @readonly", async ({ page }) => {
+  const response = await page.goto("/no-such-page");
+  expect(response?.status()).toBe(404);
+  await expect(page.locator(".site-header")).toContainText("not an official ANU system");
+  await page.getByRole("link", { name: "Back to your plan" }).click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
+// Session 8: every page carries the favicon and the description.
+test("12. favicon and description on every page @readonly", async ({ page, request }) => {
+  for (const path of ["/", "/about", "/readme/"]) {
+    await page.goto(path);
+    await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/favicon.svg");
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+      "content",
+      "A clash-aware class picker. Student project, not an official ANU system. Demo timetable.",
+    );
+  }
+  const icon = await request.get("/favicon.svg");
+  expect(icon.status()).toBe(200);
+  expect(await icon.text()).toContain("<svg");
+});

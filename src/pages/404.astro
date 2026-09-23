@@ -1,14 +1,7 @@
 ---
-// README.md, rendered: what this app is and what good looks like here,
-// published with the app. spec/readme.test.ts checks the whole of it is here.
-import * as readme from "../../README.md";
 import "../styles.css";
 
-const title = readme.getHeadings().find((h) => h.depth === 1)?.text ?? "README";
-
-// README images are committed to public/ and linked relatively (public/x.png)
-// so they render on GitHub; here they're served from the site root.
-const html = (await readme.compiledContent()).replace(/(src|href)="public\//g, '$1="/');
+Astro.response.status = 404;
 ---
 
 <!doctype html>
@@ -21,7 +14,7 @@ const html = (await readme.compiledContent()).replace(/(src|href)="public\//g, '
       content="A clash-aware class picker. Student project, not an official ANU system. Demo timetable."
     />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>{title}</title>
+    <title>Page not found — Clash-free class picker</title>
   </head>
   <body>
     <header class="site-header">
@@ -32,6 +25,10 @@ const html = (await readme.compiledContent()).replace(/(src|href)="public\//g, '
       <a href="/">Plan</a>
       <a href="/about">About</a>
     </nav>
-    <main set:html={html} />
+    <main>
+      <h1>Page not found</h1>
+      <p>There is nothing at this address.</p>
+      <p><a href="/">Back to your plan</a></p>
+    </main>
   </body>
 </html>
