@@ -47,6 +47,7 @@ import {
   type ActivitySeed,
   openPlanStore,
   ClashError,
+  FixedClassError,
   NotFoundError,
   optionStatus,
   SEED_CATALOGUE,
@@ -113,35 +114,35 @@ describe("picking (real SQLite, temp file per test)", () => {
 
   it("saves a pick that fits", () => {
     const planId = randomUUID();
-    const lec = store.findActivity("COMP4020", "LEC", "01");
+    const crit01 = store.findActivity("COMP4020", "CRIT", "01");
 
-    store.pick(planId, lec.id);
+    store.pick(planId, crit01.id);
 
-    expect(store.listPicks(planId).map((a) => a.id)).toContain(lec.id);
+    expect(store.listPicks(planId).map((a) => a.id)).toContain(crit01.id);
   });
 
   it("refuses a clashing pick, names the clash, and writes nothing", () => {
     const planId = randomUUID();
-    // COMP4020 LEC 01 (Mon 11:00-13:00) vs MATH1005 LEC 01 (Mon 12:00-13:00): clash
-    const comp4020Lec = store.findActivity("COMP4020", "LEC", "01");
-    const mathLec = store.findActivity("MATH1005", "LEC", "01");
+    // COMP4020 CRIT 01 (Wed 15:30-17:00) vs COMP2100 TUT 01 (Wed 16:00-18:00): clash
+    const crit01 = store.findActivity("COMP4020", "CRIT", "01");
+    const tut01 = store.findActivity("COMP2100", "TUT", "01");
 
-    store.pick(planId, comp4020Lec.id);
+    store.pick(planId, crit01.id);
 
     let error: unknown;
     try {
-      store.pick(planId, mathLec.id);
+      store.pick(planId, tut01.id);
     } catch (e) {
       error = e;
     }
 
     expect(error).toBeInstanceOf(ClashError);
     const clashError = error as ClashError;
-    expect(clashError.clashesWith.id).toBe(comp4020Lec.id);
+    expect(clashError.clashesWith.id).toBe(crit01.id);
     expect(clashError.message).toContain("COMP4020");
 
-    const picks = store.listPicks(planId);
-    expect(picks.map((a) => a.id)).toEqual([comp4020Lec.id]);
+    const nonFixedPicks = store.listPicks(planId).filter((a) => a.type !== "LEC");
+    expect(nonFixedPicks.map((a) => a.id)).toEqual([crit01.id]);
   });
 
   it("replaces the previous pick of the same course + activity type", () => {
@@ -198,24 +199,24 @@ describe("picking (real SQLite, temp file per test)", () => {
 
   it("removes a pick", () => {
     const planId = randomUUID();
-    const lec = store.findActivity("COMP4020", "LEC", "01");
-    store.pick(planId, lec.id);
+    const crit01 = store.findActivity("COMP4020", "CRIT", "01");
+    store.pick(planId, crit01.id);
 
-    store.removePick(planId, lec.id);
+    store.removePick(planId, crit01.id);
 
-    expect(store.listPicks(planId).map((a) => a.id)).not.toContain(lec.id);
+    expect(store.listPicks(planId).map((a) => a.id)).not.toContain(crit01.id);
   });
 
   it("persists across closing and reopening the same file", () => {
     const planId = randomUUID();
     const dbPath = join(dir, "test.db");
-    const lec = store.findActivity("COMP4020", "LEC", "01");
-    store.pick(planId, lec.id);
+    const crit01 = store.findActivity("COMP4020", "CRIT", "01");
+    store.pick(planId, crit01.id);
     store.close();
 
     store = openPlanStore(dbPath);
 
-    expect(store.listPicks(planId).map((a) => a.id)).toContain(lec.id);
+    expect(store.listPicks(planId).map((a) => a.id)).toContain(crit01.id);
   });
 
   it("keeps two plan ids independent", () => {
@@ -229,6 +230,126 @@ describe("picking (real SQLite, temp file per test)", () => {
 
     expect(store.listPicks(planA).map((a) => a.id)).toEqual([critA.id]);
     expect(store.listPicks(planB).map((a) => a.id)).toEqual([critB.id]);
+  });
+});
+
+// DESIGN.md, added this session: "Lectures come first" — an activity type
+// with exactly one group is fixed, in the plan from the first visit, and
+// can't be picked, removed or swapped.
+describe("lectures come first (fixed classes)", () => {
+  let dir: string;
+  let store: PlanStore;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "crit7-fixed-"));
+    store = openPlanStore(join(dir, "test.db"));
+  });
+
+  afterEach(() => {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("a new plan already has every LEC picked, before any request picks", () => {
+    const planId = randomUUID();
+
+    const picks = store.listPicks(planId);
+
+    const lecIds = SEED_CATALOGUE.filter((seed) => seed.type === "LEC")
+      .map((seed) => store.findActivity(seed.courseCode, seed.type, seed.group).id)
+      .sort((a, b) => a - b);
+    expect(picks.map((a) => a.id).sort((a, b) => a - b)).toEqual(lecIds);
+  });
+
+  it("removing or swapping a fixed class is refused (error, nothing written)", () => {
+    const planId = randomUUID();
+    const lec = store.findActivity("COMP4020", "LEC", "01");
+    const picksBefore = store.listPicks(planId);
+
+    expect(() => store.pick(planId, lec.id)).toThrow(FixedClassError);
+    expect(() => store.removePick(planId, lec.id)).toThrow(FixedClassError);
+
+    expect(store.listPicks(planId)).toEqual(picksBefore);
+  });
+
+  it("COMP2100 TUT 03 is 'clashes with lecture MATH1005 LEC 01' for a brand-new plan", () => {
+    const planId = randomUUID();
+    const picks = store.listPicks(planId);
+    const tut03 = store.findActivity("COMP2100", "TUT", "03");
+    const mathLec = store.findActivity("MATH1005", "LEC", "01");
+
+    expect(optionStatus(picks, tut03)).toEqual({ clashesWith: mathLec });
+
+    let error: unknown;
+    try {
+      store.pick(planId, tut03.id);
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(ClashError);
+    expect((error as ClashError).message).toBe("clashes with lecture MATH1005 LEC 01 (Mon 14:00–15:00)");
+  });
+
+  it("a plan holding a pick that clashes with a fixed class loses that pick when the fixed class is ensured (the fixed class stays)", () => {
+    const planId = randomUUID();
+    const seedV1: ActivitySeed[] = [
+      { courseCode: "TEST2000", courseTitle: "Test Fixed Course", type: "LEC", group: "01", day: MON, startMin: 480, endMin: 540 },
+      { courseCode: "TEST2000", courseTitle: "Test Fixed Course", type: "TUT", group: "01", day: MON, startMin: 600, endMin: 660 },
+      { courseCode: "TEST2000", courseTitle: "Test Fixed Course", type: "TUT", group: "02", day: MON, startMin: 660, endMin: 720 },
+    ];
+    const seedDir = mkdtempSync(join(tmpdir(), "crit7-ensure-"));
+    const dbPath = join(seedDir, "test.db");
+    try {
+      const store1 = openPlanStore(dbPath, seedV1);
+      const tut01 = store1.findActivity("TEST2000", "TUT", "01");
+      store1.pick(planId, tut01.id); // fits: LEC 08:00-09:00, TUT 01 10:00-11:00
+      store1.close();
+
+      // The timetable changes: the lecture moves to overlap TUT 01.
+      const seedV2: ActivitySeed[] = seedV1.map((seed) =>
+        seed.type === "LEC" ? { ...seed, startMin: 615, endMin: 675 } : seed,
+      );
+      const store2 = openPlanStore(dbPath, seedV2);
+      const lec = store2.findActivity("TEST2000", "LEC", "01");
+      const picks = store2.listPicks(planId);
+
+      expect(picks.map((a) => a.id)).toContain(lec.id);
+      expect(picks.map((a) => a.id)).not.toContain(tut01.id);
+      store2.close();
+    } finally {
+      rmSync(seedDir, { recursive: true, force: true });
+    }
+  });
+
+  it("seeding against a DB that already has the OLD MATH1005 LEC time updates it to the new time (upsert, not insert-only)", () => {
+    const oldSeed: ActivitySeed[] = SEED_CATALOGUE.map((seed) =>
+      seed.courseCode === "MATH1005" && seed.type === "LEC" && seed.group === "01"
+        ? { ...seed, startMin: 720, endMin: 780 } // the old Mon 12:00-13:00 time
+        : seed,
+    );
+    const seedDir = mkdtempSync(join(tmpdir(), "crit7-upsert-"));
+    const dbPath = join(seedDir, "test.db");
+    try {
+      const oldStore = openPlanStore(dbPath, oldSeed);
+      const before = oldStore.findActivity("MATH1005", "LEC", "01");
+      expect(before.startMin).toBe(720);
+      expect(before.endMin).toBe(780);
+      oldStore.close();
+
+      // Reopen with the current catalogue, as production does on the next deploy.
+      const upserted = openPlanStore(dbPath, SEED_CATALOGUE);
+      const after = upserted.findActivity("MATH1005", "LEC", "01");
+      expect(after.startMin).toBe(840);
+      expect(after.endMin).toBe(900);
+
+      const rows = upserted
+        .listActivities()
+        .filter((a) => a.courseCode === "MATH1005" && a.type === "LEC" && a.group === "01");
+      expect(rows).toHaveLength(1);
+      upserted.close();
+    } finally {
+      rmSync(seedDir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -290,9 +411,12 @@ describe("optionStatus (the shared fits/clashes/picked check)", () => {
     const tut01 = store.findActivity("COMP2100", "TUT", "01");
     const tut03 = store.findActivity("COMP2100", "TUT", "03");
     const crit02 = store.findActivity("COMP4020", "CRIT", "02");
+    const mathLec = store.findActivity("MATH1005", "LEC", "01");
 
     expect(optionStatus(picks, tut01)).toEqual({ clashesWith: crit01 });
-    expect(optionStatus(picks, tut03)).toBe("fits");
+    // COMP2100 TUT 03 (Mon 13:00-15:00) clashes with the fixed MATH1005 LEC 01
+    // (Mon 14:00-15:00) from the start — DESIGN.md's "Lectures come first" demo.
+    expect(optionStatus(picks, tut03)).toEqual({ clashesWith: mathLec });
     expect(optionStatus(picks, crit02)).toBe("fits");
     expect(optionStatus(picks, crit01)).toBe("picked");
   });
@@ -307,7 +431,12 @@ describe("optionStatus (the shared fits/clashes/picked check)", () => {
       const picksBefore = store.listPicks(planId);
       const status = optionStatus(picksBefore, activity);
 
-      if (status === "fits" || status === "picked") {
+      if (status === "fixed") {
+        // DESIGN.md: fixed classes can't be picked (there's nothing to do —
+        // they're already in the plan), and the store refuses the attempt.
+        expect(() => store.pick(planId, activity.id)).toThrow(FixedClassError);
+        expect(store.listPicks(planId)).toEqual(picksBefore);
+      } else if (status === "fits" || status === "picked") {
         expect(() => store.pick(planId, activity.id)).not.toThrow();
       } else {
         let error: unknown;
