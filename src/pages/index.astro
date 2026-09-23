@@ -8,6 +8,7 @@ import {
   optionStatus,
   progressLine,
 } from "../lib/plan-store";
+import { GRID_ROWS, gridPlacement, gridRow } from "../lib/week-grid";
 import "../styles.css";
 
 const planId = Astro.locals.planId;
@@ -58,14 +59,6 @@ function formatTime(min: number): string {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-// The week grid: 08:00-20:00 in 15-minute rows, so every seed time (all on
-// the hour or half-hour) lines up on a row boundary.
-const GRID_START_MIN = 480;
-const GRID_ROWS = ((20 - 8) * 60) / 15;
-function gridRow(min: number): number {
-  return Math.min(Math.max(Math.round((min - GRID_START_MIN) / 15), 0), GRID_ROWS) + 1;
 }
 
 // Hour labels for the grid's time gutter, 08:00 through 20:00 — every label
@@ -200,7 +193,7 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
                 <div
                   data-activity-id={activity.id}
                   class={`week-grid-event ${activity.fixed ? "week-grid-event-fixed" : "week-grid-event-picked"}`}
-                  style={`grid-column: ${activity.day + 1}; grid-row: ${gridRow(activity.startMin)} / ${gridRow(activity.endMin)};`}
+                  style={`grid-column: ${gridPlacement(activity).gridColumn}; grid-row: ${gridPlacement(activity).gridRow};`}
                 >
                   {activity.courseCode} {activity.type} {activity.group}
                   <br />
@@ -243,6 +236,8 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
       // for the server's freshly rendered copies (DESIGN.md "The one flow",
       // step 9). #plan-status sits outside both, so the live region is never
       // replaced and its announcements aren't lost.
+      import { gridPlacement } from "../lib/week-grid";
+
       const main = document.querySelector<HTMLElement>("main.plan")!;
       const status = document.querySelector<HTMLElement>("#plan-status");
       const REGIONS = ["plan-progress", "plan-layout"];
@@ -314,10 +309,6 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
       // grid. On the phone layout the grid is display:none, so no preview.
       let previewFor: Element | null = null;
 
-      function gridRow(min: number): number {
-        return Math.min(Math.max(Math.round((min - 480) / 15), 0), 48) + 1;
-      }
-
       function clearPreview(): void {
         previewFor = null;
         document.querySelectorAll(".week-grid-preview").forEach((el) => el.remove());
@@ -334,8 +325,9 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
         const { day, start, end, label, reason, clashId } = form.dataset;
         const block = document.createElement("div");
         block.className = "week-grid-preview";
-        block.style.gridColumn = String(Number(day) + 1);
-        block.style.gridRow = `${gridRow(Number(start))} / ${gridRow(Number(end))}`;
+        const place = gridPlacement({ day: Number(day), startMin: Number(start), endMin: Number(end) });
+        block.style.gridColumn = place.gridColumn;
+        block.style.gridRow = place.gridRow;
         block.textContent = label ?? "";
         if (reason) {
           const why = document.createElement("span");

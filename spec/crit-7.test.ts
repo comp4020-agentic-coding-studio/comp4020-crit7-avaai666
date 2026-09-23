@@ -648,3 +648,34 @@ describe("fill the rest for me", () => {
     }
   });
 });
+
+// DESIGN.md "Preview before you pick": the preview lands "at its day and
+// time" — the same grid cells as the real week block. One function places
+// both, with an explicit column end: the preview is absolutely positioned,
+// and for an absolutely positioned grid item a missing end means the far
+// edge of the grid, not one column.
+//
+//   src/lib/week-grid.ts
+//     gridPlacement(slot: TimeSlot): { gridColumn: string; gridRow: string }
+//       -- column 1 is the hour gutter, so Mon..Fri are columns 2..6;
+//          rows are 15-minute steps from 08:00, 1-based.
+import { gridPlacement } from "../src/lib/week-grid";
+
+describe("week grid placement (shared by week blocks and the preview)", () => {
+  it("COMP4020 CRIT 02 (Thu 14:00-15:30) is exactly one column: Thu", () => {
+    expect(gridPlacement(slot(THU, 840, 930))).toEqual({ gridColumn: "5 / 6", gridRow: "25 / 31" });
+  });
+
+  it("every weekday spans exactly one column, never into the next day", () => {
+    for (const day of [MON, TUE, WED, THU, FRI]) {
+      const [start, end] = gridPlacement(slot(day, 600, 660)).gridColumn.split(" / ").map(Number);
+      expect(start).toBe(day + 1);
+      expect(end - start).toBe(1);
+    }
+  });
+
+  it("rows run from 08:00 (row 1) in 15-minute steps to 20:00 (row 49)", () => {
+    expect(gridPlacement(slot(MON, 480, 1200)).gridRow).toBe("1 / 49");
+    expect(gridPlacement(slot(FRI, 780, 840)).gridRow).toBe("21 / 25");
+  });
+});

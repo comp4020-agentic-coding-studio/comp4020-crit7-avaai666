@@ -85,7 +85,9 @@ button:focus-visible {
 
 /* DESIGN.md "Preview before you pick". These elements are made by the
    page script, so they carry no Astro scope attribute and live here. The
-   block is absolute inside its grid area: it never moves the grid. */
+   block is absolute inside its grid area: it never moves the grid. Its
+   background is Gold Tint at 60% opacity, so a block it overlaps (the one
+   it clashes with) still reads through it; clicks pass through too. */
 .week-grid-preview {
   position: absolute;
   inset: 1px;
@@ -93,7 +95,7 @@ button:focus-visible {
   padding: 0.25rem;
   border: 2px dashed var(--anu-black);
   border-radius: 0.25rem;
-  background: var(--anu-white);
+  background: rgb(245 237 222 / 0.6);
   color: var(--anu-unigrey);
   font-size: 0.75rem;
   line-height: 1.2;
