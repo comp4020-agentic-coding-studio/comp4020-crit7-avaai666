@@ -1,8 +1,56 @@
 ---
-import { listMessages } from "../lib/db";
+import { planStore } from "../lib/plan";
+import { type Activity, describeActivity, optionStatus } from "../lib/plan-store";
 import "../styles.css";
 
-const messages = listMessages();
+const planId = Astro.locals.planId;
+const picks = planStore.listPicks(planId);
+const courses = planStore.listCourses();
+const allActivities = planStore.listActivities();
+
+const titleByCode = new Map(courses.map((c) => [c.code, c.title]));
+
+// Group by course, then by activity type, preserving listActivities()'s
+// order (seed/insertion order — DESIGN.md's course-list order), not an
+// alphabetical one.
+const courseOrder: string[] = [];
+const byCourse = new Map<string, Activity[]>();
+for (const activity of allActivities) {
+  if (!byCourse.has(activity.courseCode)) {
+    courseOrder.push(activity.courseCode);
+    byCourse.set(activity.courseCode, []);
+  }
+  byCourse.get(activity.courseCode)!.push(activity);
+}
+
+function groupByType(activities: Activity[]): [string, Activity[]][] {
+  const order: string[] = [];
+  const byType = new Map<string, Activity[]>();
+  for (const activity of activities) {
+    if (!byType.has(activity.type)) {
+      order.push(activity.type);
+      byType.set(activity.type, []);
+    }
+    byType.get(activity.type)!.push(activity);
+  }
+  return order.map((type) => [type, byType.get(type)!]);
+}
+
+const DAY_NAMES = ["", "Mon", "Tue", "Wed", "Thu", "Fri"];
+
+function formatTime(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+// The week grid: 08:00-20:00 in 15-minute rows, so every seed time (all on
+// the hour or half-hour) lines up on a row boundary.
+const GRID_START_MIN = 480;
+const GRID_ROWS = ((20 - 8) * 60) / 15;
+function gridRow(min: number): number {
+  return Math.min(Math.max(Math.round((min - GRID_START_MIN) / 15), 0), GRID_ROWS) + 1;
+}
 ---
 
 <!doctype html>
@@ -10,44 +58,284 @@ const messages = listMessages();
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>COMP4020 prototype</title>
+    <title>Clash-free class picker</title>
   </head>
   <body>
     <nav aria-label="site">
-      <a href="/">Guestbook</a>
-      <a href="/readme/">About</a>
+      <a href="/">Plan</a>
+      <a href="/about">About</a>
     </nav>
-    <main>
-      <h1>Guestbook</h1>
-      <p>
-        A minimal full-stack starter: messages live in SQLite on the machine's
-        volume (state survives a reload and a redeploy), and new messages
-        appear in every open tab over a server-sent-events stream — open this
-        page twice and sign it in one. Replace all of this with your own
-        prototype.
-      </p>
-      <form method="post" action="/api/messages">
-        <label for="body">Leave a message</label>
-        <input id="body" name="body" required maxlength="500" />
-        <button>Sign</button>
-      </form>
-      <ul id="messages">
-        {messages.map((message) => <li>{message.body}</li>)}
-      </ul>
+    <main class="plan">
+      <h1>Your plan</h1>
+      <p>Demo timetable — times are invented.</p>
+      <p id="plan-status" role="status" aria-live="polite"></p>
+
+      <div class="plan-layout">
+        <section class="course-list" aria-label="Courses">
+          {
+            courseOrder.map((code) => (
+              <section class="course">
+                <h2>
+                  {code} {titleByCode.get(code)}
+                </h2>
+                {groupByType(byCourse.get(code)!).map(([type, options]) => (
+                  <div class="activity-type">
+                    <h3>{type}</h3>
+                    <ul class="options">
+                      {options.map((activity) => {
+                        const status = optionStatus(picks, activity);
+                        const picked = status === "picked";
+                        const clash = typeof status === "object" ? status : null;
+                        const reason = clash ? `clashes with ${describeActivity(clash.clashesWith)}` : null;
+                        return (
+                          <li class="option" data-status={picked ? "picked" : clash ? "clashes" : "fits"}>
+                            <form
+                              class="option-form"
+                              data-activity-id={activity.id}
+                              data-action={picked ? "remove" : "pick"}
+                            >
+                              <span class="option-time">
+                                {DAY_NAMES[activity.day]} {formatTime(activity.startMin)}–{formatTime(activity.endMin)}
+                              </span>
+                              <span class="option-group">Group {activity.group}</span>
+                              <button type="submit" disabled={clash !== null}>
+                                {picked ? "Remove" : "Pick"}
+                              </button>
+                              <span class="option-label">{picked ? "picked" : reason ?? "fits"}</span>
+                            </form>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </section>
+            ))
+          }
+        </section>
+
+        <section class="week" aria-label="Your week">
+          <h2>Your week</h2>
+          <div class="week-grid" aria-hidden="true">
+            <div class="week-grid-header">
+              <div class="week-grid-corner"></div>
+              {DAY_NAMES.slice(1).map((day) => (
+                <div class="week-grid-day">{day}</div>
+              ))}
+            </div>
+            <div class="week-grid-body" style={`grid-template-rows: repeat(${GRID_ROWS}, 1fr);`}>
+              {picks.map((activity) => (
+                <div
+                  class="week-grid-event"
+                  style={`grid-column: ${activity.day + 1}; grid-row: ${gridRow(activity.startMin)} / ${gridRow(activity.endMin)};`}
+                >
+                  {activity.courseCode} {activity.type} {activity.group}
+                  <br />
+                  {formatTime(activity.startMin)}–{formatTime(activity.endMin)}
+                </div>
+              ))}
+            </div>
+          </div>
+          <ul class="week-list">
+            {[1, 2, 3, 4, 5].map((day) => {
+              const dayPicks = picks
+                .filter((a) => a.day === day)
+                .sort((a, b) => a.startMin - b.startMin);
+              return (
+                <li>
+                  <h3>{DAY_NAMES[day]}</h3>
+                  {dayPicks.length === 0 ? (
+                    <p class="week-list-empty">Nothing picked</p>
+                  ) : (
+                    <ul>
+                      {dayPicks.map((activity) => (
+                        <li>
+                          {activity.courseCode} {activity.type} {activity.group} ({formatTime(activity.startMin)}–
+                          {formatTime(activity.endMin)})
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      </div>
     </main>
     <script>
-      // The live half of the demo: subscribe to the SSE stream and prepend
-      // messages as they arrive. The form itself needs none of this — its
-      // POST + redirect re-renders the submitting tab from SQLite; this
-      // stream is how every other tab finds out.
-      const list = document.querySelector("#messages");
-      const source = new EventSource("/api/events");
-      source.addEventListener("message", (event) => {
-        const message = JSON.parse(event.data);
-        const item = document.createElement("li");
-        item.textContent = message.body;
-        list?.prepend(item);
+      // Progressive enhancement, no framework: every pick/remove is a real
+      // <button> in a <form>; this script is what turns the submit into a
+      // fetch call instead of a full-page navigation (the API takes JSON
+      // and DELETE, which a plain HTML form can't send on its own).
+      const status = document.querySelector("#plan-status");
+
+      document.querySelectorAll<HTMLFormElement>("form.option-form").forEach((form) => {
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const activityId = Number(form.dataset.activityId);
+          const action = form.dataset.action;
+
+          const response =
+            action === "remove"
+              ? await fetch(`/api/picks/${activityId}`, { method: "DELETE" })
+              : await fetch("/api/picks", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ activityId }),
+                });
+
+          if (response.status === 200 || response.status === 204) {
+            location.reload();
+            return;
+          }
+
+          const body = await response.json().catch(() => null);
+          if (status) status.textContent = body?.error ?? `request failed (${response.status})`;
+        });
       });
     </script>
+    <style>
+      .plan {
+        max-width: none;
+        width: min(100%, 70rem);
+      }
+
+      .plan-layout {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+
+      .course-list,
+      .week {
+        min-width: 0;
+      }
+
+      .course h2 {
+        margin-bottom: 0.25rem;
+      }
+
+      .activity-type h3 {
+        margin-block: 0.5rem 0.25rem;
+        font-size: 1rem;
+        color: #444;
+      }
+
+      .options {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+
+      .option {
+        margin-block-end: 0.4rem;
+      }
+
+      .option-form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0;
+      }
+
+      .option-time {
+        min-width: 11rem;
+      }
+
+      .option-group {
+        min-width: 6rem;
+      }
+
+      .option[data-status="picked"] .option-label {
+        color: #0a7a2f;
+        font-weight: 600;
+      }
+
+      .option[data-status="clashes"] .option-label {
+        color: #b3261e;
+      }
+
+      .week-grid {
+        display: grid;
+        border: 1px solid #ccc;
+      }
+
+      .week-grid-header {
+        display: grid;
+        grid-template-columns: 3rem repeat(5, 1fr);
+      }
+
+      .week-grid-day {
+        text-align: center;
+        font-weight: 600;
+        padding-block: 0.25rem;
+        border-inline-start: 1px solid #ccc;
+      }
+
+      .week-grid-body {
+        position: relative;
+        display: grid;
+        grid-template-columns: 3rem repeat(5, 1fr);
+        grid-auto-flow: dense;
+        min-height: 30rem;
+      }
+
+      .week-grid-event {
+        margin: 1px;
+        padding: 0.25rem;
+        font-size: 0.75rem;
+        line-height: 1.2;
+        background: #e6f0ff;
+        border: 1px solid #0b5fff;
+        border-radius: 0.25rem;
+        overflow: hidden;
+      }
+
+      .week-list {
+        list-style: none;
+        padding: 0;
+        display: none;
+      }
+
+      .week-list h3 {
+        margin-block-end: 0.25rem;
+      }
+
+      .week-list-empty {
+        color: #666;
+        margin-block: 0 1rem;
+      }
+
+      /* Layout switch, DESIGN.md "Layout": grid beside the list on desktop,
+         list below the list on phone-width screens, no horizontal scroll. */
+      @media (min-width: 701px) {
+        .plan-layout {
+          flex-direction: row;
+          align-items: flex-start;
+        }
+
+        .course-list {
+          flex: 1 1 28rem;
+        }
+
+        .week {
+          flex: 1 1 32rem;
+          position: sticky;
+          top: 1rem;
+        }
+      }
+
+      @media (max-width: 700px) {
+        .week-grid {
+          display: none;
+        }
+
+        .week-list {
+          display: block;
+        }
+      }
+    </style>
   </body>
 </html>
