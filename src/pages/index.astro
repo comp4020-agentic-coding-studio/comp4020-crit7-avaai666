@@ -85,13 +85,20 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
     </nav>
     <main class="plan">
       <h1>Your plan</h1>
-      <p>Demo timetable — times are invented.</p>
 
       <div id="plan-progress" class="progress">
+        <div class="progress-track" aria-hidden="true">
+          <span class="progress-fill" style={`width: ${progress.total ? (100 * progress.made) / progress.total : 100}%;`}></span>
+        </div>
         <p class="progress-line">{progressLine(progress)}</p>
         {
           progress.complete ? (
-            <p class="progress-complete">{COMPLETE_MESSAGE}</p>
+            <p class="progress-complete">
+              <svg class="progress-check" aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
+                <path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" stroke-width="2.25" />
+              </svg>
+              {COMPLETE_MESSAGE}
+            </p>
           ) : (
             <form class="fill-form" data-action="fill">
               <button type="submit">Fill the rest for me</button>
@@ -100,6 +107,7 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
         }
       </div>
       <p id="plan-status" role="status" aria-live="polite"></p>
+      <p class="demo-note">Demo timetable — times are invented.</p>
 
       <div id="plan-layout" class="plan-layout">
         <section class="course-list" aria-label="Courses">
@@ -393,19 +401,54 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
         width: min(100%, 1200px);
       }
 
-      /* DESIGN.md "Progress": always at the top, in words. */
+      /* DESIGN.md "Progress" + Look v2: a thin bar under the title, the
+         words next to it. The words are what count; the bar only mirrors
+         them, so it is hidden from screen readers. */
       .progress {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 0.5rem 1rem;
-        margin-block: 1rem 0;
+        /* The Fill button's height, so the page doesn't jump up when the
+           button goes away on completion. */
+        min-height: 44px;
+        margin-block: 0.5rem 0;
+      }
+
+      .progress-track {
+        flex: 0 0 10rem;
+        height: 6px;
+        border-radius: 3px;
+        background: var(--line);
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        display: block;
+        height: 100%;
+        background: var(--anu-black);
       }
 
       .progress-line,
       .progress-complete {
         margin: 0;
         font-weight: 600;
+      }
+
+      .progress-complete {
+        display: inline-flex;
+        align-items: flex-start;
+        gap: 0.35rem;
+        color: var(--anu-black);
+      }
+
+      .progress-check {
+        flex: none;
+        margin-top: 0.15em;
+      }
+
+      .demo-note {
+        margin-block: 0 1rem;
       }
 
       .fill-form {
@@ -416,7 +459,7 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
          down when it appears. */
       #plan-status {
         min-height: 1.4em;
-        margin-block: 0.5rem 1rem;
+        margin-block: 0.5rem;
       }
 
       .plan-layout {
