@@ -679,3 +679,73 @@ describe("week grid placement (shared by week blocks and the preview)", () => {
     expect(gridPlacement(slot(FRI, 780, 840)).gridRow).toBe("21 / 25");
   });
 });
+
+// DESIGN.md "The one flow", step 9: 'a status line says "Saved." or the
+// error, in an aria-live region.' Regression: the page wrote the text on a
+// requestAnimationFrame, which Chrome doesn't run for a page it isn't
+// painting — so the save went through and "Saved." never appeared.
+//
+//   src/lib/status.ts
+//     createStatus(el, timers?): (text: string, ms?: number) => void
+//       -- writes the text at once (no animation frame), shows the toast
+//          class, hides it again after `ms`; saying the same text twice
+//          still changes the text, so the live region announces it again.
+import { createStatus } from "../src/lib/status";
+
+function fakeStatusElement() {
+  const classes = new Set<string>();
+  return {
+    textContent: "" as string | null,
+    classList: { add: (c: string) => classes.add(c), remove: (c: string) => classes.delete(c) },
+    classes,
+  };
+}
+
+function fakeTimers() {
+  const queue: { fn: () => void; ms: number }[] = [];
+  return {
+    set: (fn: () => void, ms: number) => queue.push({ fn, ms }) - 1,
+    clear: (handle: number) => {
+      queue[handle] = { fn: () => {}, ms: 0 };
+    },
+    runAll: () => queue.splice(0).forEach((t) => t.fn()),
+    queue,
+  };
+}
+
+describe("status line (Saved. / error)", () => {
+  it("writes the text immediately, without waiting for an animation frame", () => {
+    const el = fakeStatusElement();
+    const say = createStatus(el, fakeTimers());
+
+    say("Saved.");
+
+    expect(el.textContent).toBe("Saved.");
+    expect(el.classes.has("is-visible")).toBe(true);
+  });
+
+  it("hides the toast after the given time, but keeps the text for screen readers", () => {
+    const el = fakeStatusElement();
+    const timers = fakeTimers();
+    const say = createStatus(el, timers);
+
+    say("Saved.", 2000);
+    expect(timers.queue.map((t) => t.ms)).toEqual([2000]);
+    timers.runAll();
+
+    expect(el.classes.has("is-visible")).toBe(false);
+    expect(el.textContent).toBe("Saved.");
+  });
+
+  it("saying the same text twice still changes the region, so it's announced again", () => {
+    const el = fakeStatusElement();
+    const say = createStatus(el, fakeTimers());
+
+    say("Saved.");
+    const first = el.textContent;
+    say("Saved.");
+
+    expect(el.textContent).not.toBe(first);
+    expect(el.textContent!.trim()).toBe("Saved.");
+  });
+});

@@ -237,6 +237,7 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
       // step 9). #plan-status sits outside both, so the live region is never
       // replaced and its announcements aren't lost.
       import { gridPlacement } from "../lib/week-grid";
+      import { createStatus } from "../lib/status";
 
       const main = document.querySelector<HTMLElement>("main.plan")!;
       const status = document.querySelector<HTMLElement>("#plan-status");
@@ -245,17 +246,7 @@ const HOURS = Array.from({ length: 13 }, (_, i) => 8 + i);
       // On phone widths the status line is a toast (see the CSS); the
       // is-visible class only matters there. Errors stay up longer than
       // "Saved." so there's time to read them.
-      let toastTimer: number | undefined;
-      function say(text: string, ms = 2000): void {
-        if (!status) return;
-        status.textContent = "";
-        requestAnimationFrame(() => {
-          status.textContent = text;
-          status.classList.add("is-visible");
-          window.clearTimeout(toastTimer);
-          toastTimer = window.setTimeout(() => status.classList.remove("is-visible"), ms);
-        });
-      }
+      const say = status ? createStatus(status) : () => {};
 
       function buttons(): HTMLButtonElement[] {
         return REGIONS.flatMap((id) => [...(document.getElementById(id)?.querySelectorAll("button") ?? [])]);
